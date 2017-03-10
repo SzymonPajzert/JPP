@@ -62,12 +62,13 @@ sumA autL autR = A {
 thenA :: Auto a q1 -> Auto a q2 -> Auto a (Either q1 q2)
 thenA aut1 aut2 = A {
   states = zipEither (states aut1) (states aut2),
-  initStates = map Left $ states aut1,
+  initStates = appendRight $ states aut1,
   isAccepting = either (const False) (isAccepting aut2),
-  transition = either leftTrans (\q a -> map Right $ transition aut2 q a)
-  } where leftTrans leftState char = map Right rightStates ++ map Left nextStates
-            where nextStates = transition aut1 leftState char
-                  rightStates = if any (isAccepting aut1) nextStates then initStates aut2 else []
+  transition = either (\q a -> appendRight $ transition aut1 q a) (\q a -> map Right $ transition aut2 q a)
+  }
+  where
+    appendRight states = (map Right rightStates) ++ map Left states
+      where rightStates = if any (isAccepting aut1) states then initStates aut2 else []
           
 fromLists :: (Eq q, Eq a) => [q] -> [q] -> [q] -> [(q,a,[q])] -> Auto a q
 fromLists states initStates acceptingStates transitions = A {
