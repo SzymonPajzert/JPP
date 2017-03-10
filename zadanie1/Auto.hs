@@ -1,24 +1,18 @@
 module Auto (Auto, accepts, emptyA, epsA, symA, leftA, sumA, thenA, fromLists, toLists) where
 import Data.List
 
-
 data Auto a q = A { states      :: [q]
                   , initStates  :: [q]
                   , isAccepting :: q -> Bool
                   , transition  :: q -> a -> [q]
                   }
 
-areAccepting :: Auto a q -> [q] -> Bool
-areAccepting automata states = foldl (||) False (map checker states)
-  where checker = isAccepting automata
-
 concatTransition :: Eq q => Auto a q -> [q] -> a -> [q]
-concatTransition automata states char = let
-  iter state newStates = newStates `union` (transition automata state char) 
-  in foldr iter [] states
+concatTransition automata states char = nub newStates
+  where newStates = concatMap (flip (transition automata) char) states
 
 accepts :: Eq q => Auto a q -> [a] -> Bool
-accepts automata chars = areAccepting automata finalStates
+accepts automata chars = any (isAccepting automata) finalStates
   where finalStates = foldl (concatTransition automata) (initStates automata) chars
 
 emptyA :: Auto a ()
@@ -50,7 +44,7 @@ leftA :: Auto a q -> Auto a (Either q r)
 leftA automata = A {
   states = map Left $ states automata,
   initStates = map Left $ initStates automata,
-  isAccepting = (isAccepting automata) . fromLeft,
+  isAccepting = either (isAccepting automata) (const False),
   transition = either (\q a -> map Left (transition automata q a)) (const $ const [])
   }
 
@@ -73,7 +67,7 @@ thenA aut1 aut2 = A {
   transition = either leftTrans (\q a -> map Right $ transition aut2 q a)
   } where leftTrans leftState char = map Right rightStates ++ map Left nextStates
             where nextStates = transition aut1 leftState char
-                  rightStates = if areAccepting aut1 nextStates then initStates aut2 else []
+                  rightStates = if any (isAccepting aut1) nextStates then initStates aut2 else []
           
 fromLists :: (Eq q, Eq a) => [q] -> [q] -> [q] -> [(q,a,[q])] -> Auto a q
 fromLists states initStates acceptingStates transitions = A {
