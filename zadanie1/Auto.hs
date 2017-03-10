@@ -12,12 +12,14 @@ areAccepting :: Auto a q -> [q] -> Bool
 areAccepting automata states = foldl (||) False (map checker states)
   where checker = isAccepting automata
 
+concatTransition :: Eq q => Auto a q -> [q] -> a -> [q]
+concatTransition automata states char = let
+  iter state newStates = newStates `union` (transition automata state char) 
+  in foldr iter [] states
+
 accepts :: Eq q => Auto a q -> [a] -> Bool
-accepts automata [] = areAccepting automata $ initStates automata
-accepts automata (char:chars) = newAutomata `accepts` chars
-  where newAutomata = automata { initStates = newInit }
-        newInit = foldr iter [] (initStates automata)
-        iter state newStates = newStates `union` (transition automata state char) 
+accepts automata chars = areAccepting automata finalStates
+  where finalStates = foldl (concatTransition automata) (initStates automata) chars
 
 emptyA :: Auto a ()
 emptyA = A {
@@ -44,18 +46,12 @@ symA symbol = A {
         trans False sym | sym == symbol = [True]
         trans False sym | otherwise =  []
 
-fromLeft :: Either a b -> a
-fromLeft (Left l) = l
-
--- newTransition :: Either q r -> a -> [Either q r]
--- transtition :: q -> a -> [q] 
-
 leftA :: Auto a q -> Auto a (Either q r)
 leftA automata = A {
   states = map Left $ states automata,
   initStates = map Left $ initStates automata,
   isAccepting = (isAccepting automata) . fromLeft,
-  transition = (\q a -> map Left (transition automata (fromLeft q) a))
+  transition = either (\q a -> map Left (transition automata q a)) (const $ const [])
   }
 
 zipEither :: [a] -> [b] -> [Either a b]
