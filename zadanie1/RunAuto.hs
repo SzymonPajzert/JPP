@@ -3,7 +3,6 @@ import Auto
 import Data.Char
 import System.Environment
 import Data.Maybe
-import Control.Exception
 import Text.Read
 
 newtype Alpha = Alpha { unAlpha :: Char } deriving (Eq)
@@ -17,6 +16,8 @@ instance Show Alpha where
   show = show . unAlpha
 
 -- Note: do not use newtype to opaque the type inside record
+-- Note: to understand recursion you have to understand recursion
+-- Note: concat [str1, str2, str3] is a good way to avoid multiple (++)
 
 data FileInput = FileInput { statesNumber :: Int
                            , initStates :: [Int]
@@ -52,34 +53,36 @@ parseInput lines = do
     word = map Alpha word
     }
 
-readFileInput :: FilePath -> IO FileInput
+readFileInput :: FilePath -> IO (Maybe FileInput)
 readFileInput fileName = do
   fileContent <- readFile fileName
-  let Just fileInput = parseInput $ lines fileContent
+  let fileInput = parseInput $ lines fileContent
   return fileInput
 
 createAutomata :: FileInput -> Maybe (Auto Alpha Int)
-createAutomata input =
+createAutomata input = do
+  let 
   if validation
   then Just $ fromLists states (initStates input) (acceptingStates input) transitionList
   else Nothing
   where states = [1..(statesNumber input)]
         transitionList = func `concatMap` (transitions input)
         func (start, chars, ends) = (\char -> (start, Alpha char, ends)) `map` chars
-        validation = True -- TODO implement
+        validation = True -- TODO implementt
 
 rList :: String -> [Int]
 rList = read
 
-hmain :: IO ()
-hmain = do
+main :: IO ()
+main = do
   [fileName] <- getArgs
-  fileInput <- readFileInput fileName
-  let Just automata = createAutomata fileInput
+  fileInputMaybe <- readFileInput fileName
   
-  putStrLn $ show $ accepts automata $ word fileInput
+  let automataReturn = do
+      fileInput <- fileInputMaybe
+      automata <- createAutomata fileInput
+      return $ show $ accepts automata $ word fileInput
 
-main =
-  catch (hmain) (\e -> do
-      putStrLn $ show (e :: IOException)
-      putStrLn "BAD INPUT")
+  putStrLn $ case automataReturn of
+    Just a -> a
+    Nothing -> "BAD INPUT"
