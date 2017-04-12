@@ -18,5 +18,19 @@ cabal.sandbox.config
 .stack-work/
 cabal.project.local
 
+.*
+
 *.x
 *.bak
+**/syntax/AbsGrammar.hs
+**/syntax/DocGrammar.txt
+**/syntax/ErrM.hs
+**/syntax/LexGrammar.hs
+**/syntax/Makefile
+**/syntax/Makefile.bu
+**/syntax/ParGrammar.hs
+**/syntax/ParGrammar.y
+**/syntax/PrintGrammar.hs
+**/syntax/SkelGrammar.hs
+**/syntax/TestGrammar
+**/syntax/TestGrammar.hs
