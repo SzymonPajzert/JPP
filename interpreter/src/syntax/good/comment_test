@@ -1,0 +1,15 @@
+{- multiline comments
+are
+
+
+spanning
+
+
+really long
+-}
+
+-- this is one line comment
+
+main = let
+  a = 5
+  in 5 -- this should work as well

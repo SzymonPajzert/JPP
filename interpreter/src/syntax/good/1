@@ -1,2 +1,6 @@
 a = 5;
-b = fun x -> inc x
+b = fun x -> inc x;
+c = ();
+d = (a, b);
+e = [1, 2, 3];
+f = [1, 2, 3, inc 3]
