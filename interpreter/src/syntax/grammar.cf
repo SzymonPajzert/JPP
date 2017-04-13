@@ -1,16 +1,24 @@
 --- NOTE: do not use at once separator and terminator
 --- NOTE happy -i lists shift reduce conflicts in a file
 
-Prog. Program ::= [VDef] ;
-separator nonempty VDef ";" ;
+Prog. Program ::= [TopDef] ;
+
+VarDef. TopDef ::= VDef ;
+TypDef. TopDef ::= TDef ;
+
+terminator nonempty TopDef ";" ;
 
 --- syntactic sugar for lambdas - variables are lambdas with 0 arguments
 Def. VDef ::= [Ident] "=" Exp1 ;
 separator nonempty Ident "" ;
 
-{-
+TDef. TDef ::= "placeholder" ;
 
 token UIdent (upper (letter | digit | '_')*) ;
+
+{-
+
+
 
 --- Unbound type variable, thats extracted from environment
 TUnb.  Type ::=  UIdent ; 
@@ -18,46 +26,51 @@ TTup.  Type ::= "(" [Type] ")" ;
 separator Type "," ; 
 
 
-EMat. Exp1 ::= "match" Exp "with" "{" [MCase] "}";
+
 
 TNew. Type ::= "newtype" UIdent  ;
 TData. Type ::= "data" ;
 
-MCas. MCase ::= Bind "->" Exp ;
-separator nonempty MCase "|" ;
-
-BHint. Bind ::= Ident ":" Type ;
-BVar.  Bind ::= Ident ;
-
 -}
+
+EMat. Exp1 ::= "match" Exp "with" "{" [MCase] "}" ;
+
+MCas. MCase ::= "|" Bind "->" Exp ;
+separator nonempty MCase "" ;
+
+-- BHint. Bind ::= Ident ":" Type ;
+BVar.  Bind ::= Ident ;
 
 ELam. Exp1 ::= "fun" [Ident] "->" Exp1 ;
 
+separator VDef ";" ;
 ELet. Exp1 ::= "let" [VDef] "in" Exp1 ;
 
 
 _. Exp  ::= Exp1 ;
 _. Exp1 ::= Exp2 ;
+_. Exp2 ::= Exp3 ;
 _. Exp3 ::= Exp4 ;
 
-EApp. Exp2 ::= [Exp3] ;
+EApp. Exp2 ::= Exp2 Exp3 ; -- TODO left joining sequences of applications
 -- NOTE BNFC doesnt see spaces since they are removed by lexer  
 
-separator nonempty Exp3 "" ;
+separator Exp3 "" ;
 
 ETup. Exp4 ::= "(" [Exp] ")" ;
 ELis. Exp4 ::= "[" [Exp] "]" ;
 separator Exp "," ;
 
--- EIf.  Exp1 ::= "if" Exp "then" Exp "else" Exp ;
+EIf.  Exp1 ::= "if" Exp "then" Exp "else" Exp ;
+
+EInt. Exp4 ::= Integer ;   -- Integer literal
+ECon. Exp4 ::= UIdent ;    -- Type constructor
+EVar. Exp4 ::= Ident ;     -- Identificator call
+
+-- Boolean types are part of language not hardcoded in its grammar 
+-- 
 
 
-EInt. Exp4 ::= Integer ;
-EBool.Exp4 ::= Boolean ;
-EVar. Exp4 ::= Ident ;
-
-BTrue.  Boolean ::= "True" ;
-BFalse. Boolean ::= "False" ;
 
 comment "--" ;
 comment "{-" "-}" ;

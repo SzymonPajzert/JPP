@@ -1,6 +1,18 @@
+-- Integers
 a = 5;
+
+-- Boleans
+a = True;
+a = False;
+
+-- ADTs
+a = Empty;
+a = Node 5 Empty Empty;
+a = Node 10 a (Node 6 Empty a);
+
 b = fun x -> inc x;
 c = ();
 d = (a, b);
 e = [1, 2, 3];
-f = [1, 2, 3, inc 3]
+f = [1, 2, 3, inc 3];
+

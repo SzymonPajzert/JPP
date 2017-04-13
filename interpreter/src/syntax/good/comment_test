@@ -12,4 +12,4 @@ really long
 
 main = let
   a = 5
-  in 5 -- this should work as well
+  in 5; -- this should work as well
