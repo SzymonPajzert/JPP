@@ -14,9 +14,6 @@ VarDef. TopDef ::= VDef ; -- value definitions
 TypDef. TopDef ::= TDef ; -- type specifications (clarifications or new type creations)
 
 
-
-
-
 -- Token definitions
 
 token UIdent (upper (letter | digit | '_')*) ; -- Word starting with capital letter - type constuctor and types
@@ -28,11 +25,11 @@ token LIdent '`'(lower)		  		  		 ; -- lower letters - type parameters
 --- pattern matching is available in function definition
 --- mulitple definitions of function represent different cases - cases are tried top down
 
-Def. VDef ::= Ident [Bind1] "=" Exp1 ;
+Def. VDef ::= Ident [Bind1] "=" Exp ;
 separator nonempty Ident "" ;
 
 separator nonempty MCase "" ;
-EMat. Exp1 ::= "match" Exp "with" "{" [MCase] "}" ;
+EMat. Exp ::= "match" Exp "with" "{" [MCase] "}" ;
 
 MCas. MCase ::= "|" Bind "->" Exp ;
 
@@ -44,23 +41,34 @@ BVar.  Bind1 ::= Ident ;
 BInt.  Bind1 ::= Integer ;			-- Bind argument to integer value
 BSkip. Bind1 ::= "_" ;  		    -- Skip argument
 
-separator Bind1 "" ;  	  		    
+separator Bind1 "" ;
+BULis. Bind ::= Bind1 "::" Bind1 ;  -- Extract head from tail of the list
 BCon.  Bind ::= UIdent [Bind1] ;	-- Different from application since during unapplying we want to have full information about parameters
 _. Bind ::= Bind1 ;
 
 terminator VDef ";" ;
-ELet. Exp1 ::= "let" "{" [VDef] "}" Exp ;
-EIf.  Exp1 ::= "if" Exp "then" Exp "else" Exp ;
-ELam. Exp1 ::= "fun" [Ident] "->" Exp ;
+ELet. Exp ::= "let" "{" [VDef] "}" Exp ;
+EIf.  Exp ::= "if" Exp "then" Exp "else" Exp ;
+ELam. Exp ::= "fun" [Ident] "->" Exp ;
 
-EApp. Exp2 ::= Exp2 Exp3 ; -- Function application joins to left
+ESmal.                  Exp ::= Exp1 "<" Exp1 ;
+ESmal ([],[1])([],[0]). Exp ::= Exp1 ">" Exp1 ;
+
+EAdd. Exp1 ::= Exp1 "+" Exp2 ;
+ESub. Exp1 ::= Exp1 "-" Exp2 ;
+EMul. Exp2 ::= Exp2 "*" Exp3 ;
+EDiv. Exp2 ::= Exp2 "/" Exp3 ;
+
+ECons.Exp3 ::= Exp4 "::" Exp3 ;  	 -- List append joins to right
+
+EApp. Exp4 ::= Exp4 Exp5 ; 	  		 -- Function application joins to left
 
 separator Exp "," ;
-ELis. Exp3 ::= "[" [Exp] "]" ;
-ETup. Exp3 ::= "(" [Exp] ")" ;
-EInt. Exp3 ::= Integer ;   -- Integer literal
-ECon. Exp3 ::= UIdent ;    -- Type constructor
-EVar. Exp3 ::= Ident ;     -- Identificator call
+ELis. Exp5 ::= "[" [Exp] "]" ;
+ETup. Exp5 ::= "(" [Exp] ")" ;
+EInt. Exp5 ::= Integer ;			 -- Integer literal
+ECon. Exp5 ::= UIdent ;    			 -- Type constructor
+EVar. Exp5 ::= Ident ;     			 -- Identificator call
 
 -- Boolean types are part of language, not hardcoded in its grammar 
 -- Data constructors are functions, ex:
@@ -72,9 +80,9 @@ EVar. Exp3 ::= Ident ;     -- Identificator call
 _. Exp  ::= Exp1 ;
 _. Exp1 ::= Exp2 ;
 _. Exp2 ::= Exp3 ;
+_. Exp3 ::= Exp4 ;
+_. Exp4 ::= Exp5 ;
 
-
--- TDef. TDef ::= "placeholder";
 
 -- ************************ TYPES ***********************
 separator LIdent "" ;

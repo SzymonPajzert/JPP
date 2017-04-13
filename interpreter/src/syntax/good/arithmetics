@@ -4,8 +4,9 @@ a = 5 * 5;
 a = 1 + 2 * 3;
 a = 1 - 2;
 
-b = let a = 5 in a * b;
+b = let {a = 5;} a * b;
 
 c = a < b;
+c = b > a;
 
 d = a < 1 + 2 * 3;
