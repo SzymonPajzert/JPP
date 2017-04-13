@@ -1,0 +1,5 @@
+a = if True then 0 else let {
+  	   b = 5;
+  	   c = 10;
+	   d = 6;
+	 } compute b c d;

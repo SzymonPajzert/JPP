@@ -23,8 +23,8 @@
 + 5 (funkcje anonimowe i wyższego rzędu, częściowa aplikacja)
 ? 6 (listy)
 +   a) (z pattern matchingiem)
-    b) (z empty, head, tail)
-+   c) (lukier)
++   b) (z empty, head, tail)
+    c) (lukier)
 * Na 20 punktów
 + 1 (listy dowolnego typu, zagnieżdżone i listy funkcji)
   2 (proste typy algebraiczne z jednopoziomowym pattern matchingiem)

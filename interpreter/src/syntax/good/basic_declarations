@@ -16,3 +16,15 @@ d = (a, b);
 e = [1, 2, 3];
 f = [1, 2, 3, inc 3];
 
+-- Types
+A = Int;
+
+Bool = adt {
+	 | True
+	 | False
+	 };
+
+Tree `a = adt {
+  	 	| Node `a (Tree `a) (Tree `a)
+		| Empty
+		};

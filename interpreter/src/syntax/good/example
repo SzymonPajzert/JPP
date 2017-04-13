@@ -1,0 +1,19 @@
+Tree = adt {
+	 | Node Int Tree Tree
+	 | Empty
+	 };
+
+
+
+parse_tree : String -> Tree;
+parse_tree text = (fun x -> parse_tree2) text;
+
+main : String -> String;
+main input = let {
+	 tree = parse_tree input;
+	 result = match tree with {
+	 	   | Empty -> 0
+		   | Node a _ _ -> a
+		   };
+	} show result;
+		   

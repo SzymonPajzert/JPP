@@ -1,0 +1,2 @@
+-- Example shows that type application is stronger than tuples.
+Triple `a `b = (Node `a, Node `b, Node `a);

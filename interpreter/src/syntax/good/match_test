@@ -1,6 +1,6 @@
 a = match wynik with {
   | a -> a
-  | b -> b
-  | c -> c
+  | True -> b
+  | Node 5 _ _ -> c
   }
 ;

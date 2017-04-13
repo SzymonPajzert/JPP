@@ -1,76 +1,109 @@
---- NOTE: do not use at once separator and terminator
---- NOTE happy -i lists shift reduce conflicts in a file
-
-Prog. Program ::= [TopDef] ;
-
-VarDef. TopDef ::= VDef ;
-TypDef. TopDef ::= TDef ;
-
-terminator nonempty TopDef ";" ;
-
---- syntactic sugar for lambdas - variables are lambdas with 0 arguments
-Def. VDef ::= [Ident] "=" Exp1 ;
-separator nonempty Ident "" ;
-
-TDef. TDef ::= "placeholder" ;
-
-token UIdent (upper (letter | digit | '_')*) ;
-
 {-
-
-
-
---- Unbound type variable, thats extracted from environment
-TUnb.  Type ::=  UIdent ; 
-TTup.  Type ::= "(" [Type] ")" ;
-separator Type "," ; 
-
-
-
-
-TNew. Type ::= "newtype" UIdent  ;
-TData. Type ::= "data" ;
-
+I do not use coercions, since tuples coincide with parentheses in automatic rule generation
+One dimensional tuple is allowed and is treated as syntactic sugar for parentheses.
 -}
 
+
+
+-- Top definitions of program are separated by semicolon, and consist of:
+
+terminator nonempty TopDef ";" ;
+Prog. Program ::= [TopDef] ;
+
+VarDef. TopDef ::= VDef ; -- value definitions
+TypDef. TopDef ::= TDef ; -- type specifications (clarifications or new type creations)
+
+
+
+
+
+-- Token definitions
+
+token UIdent (upper (letter | digit | '_')*) ; -- Word starting with capital letter - type constuctor and types
+token LIdent '`'(lower)		  		  		 ; -- lower letters - type parameters
+
+-- ******************** VALUES ***********************
+
+--- definition of values is syntactic sugar for lambdas - variables are lambdas with 0 arguments
+--- pattern matching is available in function definition
+--- mulitple definitions of function represent different cases - cases are tried top down
+
+Def. VDef ::= Ident [Bind1] "=" Exp1 ;
+separator nonempty Ident "" ;
+
+separator nonempty MCase "" ;
 EMat. Exp1 ::= "match" Exp "with" "{" [MCase] "}" ;
 
 MCas. MCase ::= "|" Bind "->" Exp ;
-separator nonempty MCase "" ;
 
--- BHint. Bind ::= Ident ":" Type ;
-BVar.  Bind ::= Ident ;
+--- Lists and tuples in functional programming
+separator Bind "," ;				-- Separator in lists and tuples 
+BLis.  Bind1 ::= "[" [Bind] "]" ;   -- Bind list elements and its length
+BTup.  Bind1 ::= "(" [Bind] ")" ;	-- Bind tuple arguments
+BVar.  Bind1 ::= Ident ;
+BInt.  Bind1 ::= Integer ;			-- Bind argument to integer value
+BSkip. Bind1 ::= "_" ;  		    -- Skip argument
 
-ELam. Exp1 ::= "fun" [Ident] "->" Exp1 ;
+separator Bind1 "" ;  	  		    
+BCon.  Bind ::= UIdent [Bind1] ;	-- Different from application since during unapplying we want to have full information about parameters
+_. Bind ::= Bind1 ;
 
-separator VDef ";" ;
-ELet. Exp1 ::= "let" [VDef] "in" Exp1 ;
+terminator VDef ";" ;
+ELet. Exp1 ::= "let" "{" [VDef] "}" Exp ;
+EIf.  Exp1 ::= "if" Exp "then" Exp "else" Exp ;
+ELam. Exp1 ::= "fun" [Ident] "->" Exp ;
 
+EApp. Exp2 ::= Exp2 Exp3 ; -- Function application joins to left
+
+separator Exp "," ;
+ELis. Exp3 ::= "[" [Exp] "]" ;
+ETup. Exp3 ::= "(" [Exp] ")" ;
+EInt. Exp3 ::= Integer ;   -- Integer literal
+ECon. Exp3 ::= UIdent ;    -- Type constructor
+EVar. Exp3 ::= Ident ;     -- Identificator call
+
+-- Boolean types are part of language, not hardcoded in its grammar 
+-- Data constructors are functions, ex:
+-- Node : `a -> Node -> Node -> Node
+-- Empty : Node
+
+-- coercions
 
 _. Exp  ::= Exp1 ;
 _. Exp1 ::= Exp2 ;
 _. Exp2 ::= Exp3 ;
-_. Exp3 ::= Exp4 ;
-
-EApp. Exp2 ::= Exp2 Exp3 ; -- TODO left joining sequences of applications
--- NOTE BNFC doesnt see spaces since they are removed by lexer  
-
-separator Exp3 "" ;
-
-ETup. Exp4 ::= "(" [Exp] ")" ;
-ELis. Exp4 ::= "[" [Exp] "]" ;
-separator Exp "," ;
-
-EIf.  Exp1 ::= "if" Exp "then" Exp "else" Exp ;
-
-EInt. Exp4 ::= Integer ;   -- Integer literal
-ECon. Exp4 ::= UIdent ;    -- Type constructor
-EVar. Exp4 ::= Ident ;     -- Identificator call
-
--- Boolean types are part of language not hardcoded in its grammar 
--- 
 
 
+-- TDef. TDef ::= "placeholder";
+
+-- ************************ TYPES ***********************
+separator LIdent "" ;
+separator SubType "" ;
+separator Type "," ;
+separator Type3 "" ;
+
+TDef.  TDef ::= UIdent [LIdent] "=" Type ;
+TClar. TDef ::= Ident ":" Type ;
+
+-- Type is creation of new type - broadening the domain of existing types
+
+TBnb. Type3 ::= UIdent ;					-- Call of existing type (at the beginning Int and Bool)
+TUnb. Type3 ::= LIdent ;
+TTup. Type3 ::= "(" [Type] ")" ;
+TLis. Type3 ::= "[" Type2 "]" ;
+
+TCon. Type2 ::= UIdent [Type3] ;
+TFun. Type2 ::= Type2 "->" Type3 ;		-- Types bind to the right
+
+TCData. Type1 ::= "adt" "{" [SubType] "}" ;
+
+
+_. Type ::= Type1 ;
+_. Type1 ::= Type2 ;
+_. Type2 ::= Type3 ;
+
+SubType. SubType ::= "|" UIdent [Type3] ;
+-- comments
 
 comment "--" ;
 comment "{-" "-}" ;

@@ -1,1 +1,11 @@
-a = let a = 1 in (a b);
+a = let { a = 1; } a b;
+a = let { a = 1; } (a b);
+
+a = let {
+  a = 1;
+  } 5;
+
+a = let {
+  a = 1;
+  b = 6;
+  } a;
