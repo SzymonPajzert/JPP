@@ -2,12 +2,13 @@
 --- NOTE happy -i lists shift reduce conflicts in a file
 
 Prog. Program ::= [VDef] ;
-separator nonempty VDef " " ;
+separator nonempty VDef "" ;
 
 --- syntactic sugar for lambdas - variables are lambdas with 0 arguments
 Def. VDef ::= [Ident] "=" Exp1 ;
-separator nonempty Ident " " ;
+separator nonempty Ident "" ;
 
+{-
 
 token UIdent (upper (letter | digit | '_')*) ;
 
@@ -28,20 +29,30 @@ BVar.  Bind ::= Ident ;
 --- ETup. Exp2 ::= "(" Exp ")" ;
 --- separator Exp "," ;
 
+
+
 EMat. Exp1 ::= "match" Exp "with" "{" [MCase] "}";
 ELam. Exp1 ::= "fun" [Ident] "->" Exp ;
-EApp. Exp2 ::= [Ident] ;
+
+-}
 
 ELet. Exp1 ::= "let" VDef "in" Exp1 ;
 
-EIf.  Exp1 ::= "if" Exp "then" Exp "else" Exp ;
-EInt. Exp2 ::= Integer ;
-EBool.Exp2 ::= Boolean ;
 
 _. Exp  ::= Exp1 ;
 _. Exp1 ::= Exp2 ;
-_. Exp2 ::= Exp3 ;
+-- _. Exp2 ::= Exp3 ;
 _. Exp3 ::= "(" Exp ")" ;
+
+EApp. Exp2 ::= [Exp3] ;
+-- NOTE BNFC doesnt see spaces since they are removed by lexer  
+
+separator nonempty Exp3 "" ;
+
+-- EIf.  Exp1 ::= "if" Exp "then" Exp "else" Exp ;
+EInt. Exp3 ::= Integer ;
+EBool.Exp3 ::= Boolean ;
+EVar. Exp3 ::= Ident ;
 
 BTrue.  Boolean ::= "True" ;
 BFalse. Boolean ::= "False" ;

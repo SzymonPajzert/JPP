@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 bnfc -m grammar.cf
 
@@ -7,9 +6,18 @@ happy -gcad --info=gram ParGrammar.y
 alex -g LexGrammar.x
 ghc --make TestGrammar.hs -o TestGrammar
 
-for file in good/* ; do	
-	./TestGrammar < $file
-	if [[ $? != 0 ]]; then
-		cat temp
+mkdir -p res/good
+
+for file in good/* ; do
+    echo "testing $file"
+	cat $file
+	echo ""
+	./TestGrammar < $file &> res/$file
+	if (( $? == 0 )); then
+		echo "OK"
+		echo ""
+	else
+		echo "BAD"
+		echo ""
 	fi
 done
