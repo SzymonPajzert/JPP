@@ -95,12 +95,12 @@ TClar. TDef ::= Ident ":" Type ;
 
 -- Type is creation of new type - broadening the domain of existing types
 
-TBnb. Type3 ::= UIdent ;					-- Call of existing type (at the beginning Int and Bool)
+TBnb. Type3 ::= UIdent [Type3];					-- Call of existing type (at the beginning Int and Bool)
 TUnb. Type3 ::= LIdent ;
 TTup. Type3 ::= "(" [Type] ")" ;
 TLis. Type3 ::= "[" Type2 "]" ;
 
-TCon. Type2 ::= UIdent [Type3] ;
+-- TCon. Type2 ::= UIdent [Type2] ;
 TFun. Type2 ::= Type2 "->" Type3 ;		-- Types bind to the right
 
 TCData. Type1 ::= "adt" "{" [SubType] "}" ;
