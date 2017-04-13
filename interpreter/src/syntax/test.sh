@@ -8,6 +8,8 @@ ghc --make TestGrammar.hs -o TestGrammar
 
 mkdir -p res/good
 
+fail_count=0
+
 for file in good/* ; do
     echo "testing $file"
 	cat $file
@@ -19,5 +21,10 @@ for file in good/* ; do
 	else
 		echo "BAD"
 		echo ""
+		fail_count=$((fail_count + 1))
 	fi
 done
+
+echo "$fail_count tests failed"
+
+
