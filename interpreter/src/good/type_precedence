@@ -10,3 +10,4 @@ MoreTree = adt {
 	 | Node (Either Int String) MoreTree MoreTree
 	 | Empty
 	 };
+

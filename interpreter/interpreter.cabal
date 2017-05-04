@@ -57,7 +57,9 @@ executable interpreter
   -- other-extensions:    
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.8 && <4.9
+  build-depends:       array >= 0.5.1.0,
+                       array >= 0.5.1.0,
+                       base >=4.8 && <4.9
   
   -- Directories containing source files.
   hs-source-dirs:      src

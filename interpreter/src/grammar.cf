@@ -53,6 +53,7 @@ ELam. Exp ::= "fun" [Ident] "->" Exp ;
 
 ESmal.                  Exp ::= Exp1 "<" Exp1 ;
 ESmal ([],[1])([],[0]). Exp ::= Exp1 ">" Exp1 ;
+EEq.                    Exp ::= Exp1 "=" Exp1 ;
 
 EAdd. Exp1 ::= Exp1 "+" Exp2 ;
 ESub. Exp1 ::= Exp1 "-" Exp2 ;
