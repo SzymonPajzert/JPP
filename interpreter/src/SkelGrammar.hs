@@ -39,7 +39,6 @@ transExp x = case x of
   EAdd exp1 exp2 -> failure x
   ESub exp1 exp2 -> failure x
   EMul exp1 exp2 -> failure x
-  EDiv exp1 exp2 -> failure x
   ECons exp1 exp2 -> failure x
   EApp exp1 exp2 -> failure x
   ELis exps -> failure x

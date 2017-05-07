@@ -29,7 +29,6 @@ data Exp
     | EAdd Exp Exp
     | ESub Exp Exp
     | EMul Exp Exp
-    | EDiv Exp Exp
     | ECons Exp Exp
     | EApp Exp Exp
     | ELis [Exp]
