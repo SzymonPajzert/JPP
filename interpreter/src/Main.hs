@@ -4,31 +4,27 @@ module Main where
 
 import System.IO ( stdin, hGetContents )
 import System.Environment ( getArgs, getProgName )
-import System.Exit ( exitFailure, exitSuccess )
+-- import System.Exit ( exitFailure, exitSuccess )
 
 import LexGrammar
 import ParGrammar
 import SkelGrammar
 import PrintGrammar
-import AbsGrammar
+import DynamicGrammar
+import AbsGrammar as Abs
 
 import ErrM
 
 type ParseFun a = [Token] -> Err a
 
-type ProgramGram = [TopDef]
-
-desugar :: Program -> Program
-
-
+type ProgramGram = [Abs.TopDef]
+type Program = [Dyn.Def]
 
 -- TODO maybe use verbosity of error messages
 type Verbosity = Int
 
-parseGen :: ParseFun a -> String -> Err a
-parseGen p s = p $ myLexer s
 
-parse = parseGen pListTopDef
+
 
 
 
@@ -38,7 +34,9 @@ main = do
   file <- readFile fileName
 
   case parse file of
-    Ok absTree -> putStrLn "Parse completed"
+    Ok absTree ->
+      putStrLn "Parse completed"
+      interpret absTree
     Bad message -> putStrLn message
 
 
