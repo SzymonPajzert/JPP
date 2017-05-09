@@ -36,6 +36,8 @@ transExp x = case x of
   ELam idents exp -> failure x
   ESmal exp1 exp2 -> failure x
   EEq exp1 exp2 -> failure x
+  EAnd exp1 exp2 -> failure x
+  EOr exp1 exp2 -> failure x
   EAdd exp1 exp2 -> failure x
   ESub exp1 exp2 -> failure x
   EMul exp1 exp2 -> failure x

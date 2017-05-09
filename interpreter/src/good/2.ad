@@ -1,0 +1,5 @@
+value = 2;
+
+function a b = b + a * 2;
+
+main = function 1 value;

@@ -51,9 +51,12 @@ ELet. Exp ::= "let" "{" [VDef] "}" Exp ;
 EIf.  Exp ::= "if" Exp "then" Exp "else" Exp ;
 ELam. Exp ::= "fun" [Ident] "->" Exp ;
 
-ESmal.                  Exp ::= Exp1 "<" Exp1 ;
-ESmal ([],[1])([],[0]). Exp ::= Exp1 ">" Exp1 ;
-EEq.                    Exp ::= Exp1 "=" Exp1 ;
+ESmal.                  Exp2 ::= Exp3 "<" Exp3 ;
+ESmal ([],[1])([],[0]). Exp2 ::= Exp3 ">" Exp3 ;
+EEq.                    Exp2 ::= Exp3 "=" Exp3 ;
+
+EAnd. Exp ::= Exp2 "&&" Exp3 ;
+EOr.  Exp ::= Exp1 "||" Exp2 ;
 
 EAdd. Exp1 ::= Exp1 "+" Exp2 ;
 ESub. Exp1 ::= Exp1 "-" Exp2 ;

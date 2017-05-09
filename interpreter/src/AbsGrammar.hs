@@ -26,6 +26,8 @@ data Exp
     | ELam [Ident] Exp
     | ESmal Exp Exp
     | EEq Exp Exp
+    | EAnd Exp Exp
+    | EOr Exp Exp
     | EAdd Exp Exp
     | ESub Exp Exp
     | EMul Exp Exp

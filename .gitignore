@@ -22,15 +22,9 @@ cabal.project.local
 
 *.x
 *.bak
-**/syntax/AbsGrammar.hs
-**/syntax/DocGrammar.txt
-**/syntax/ErrM.hs
-**/syntax/LexGrammar.hs
+**/res/**
+**/DocGrammar.txt
 **/syntax/Makefile
-**/syntax/Makefile.bu
-**/syntax/ParGrammar.hs
-**/syntax/ParGrammar.y
-**/syntax/PrintGrammar.hs
-**/syntax/SkelGrammar.hs
-**/syntax/TestGrammar
-**/syntax/TestGrammar.hs
+**/Makefile.bu
+**/ParGrammar.y
+**/TestGrammar
