@@ -2,11 +2,8 @@
 
 # files good/*new have outputed their contents
 
-bnfc -m grammar.cf
-
-happy -gcad --info=gram ParGrammar.y
-alex -g LexGrammar.x
-ghc --make TestGrammar.hs -o TestGrammar
+export HAPPY_DEBUG=d
+make
 
 rm -r res
 mkdir -p res/parseable

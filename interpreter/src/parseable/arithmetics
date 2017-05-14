@@ -9,4 +9,9 @@ b = let {a = 5;} a * b;
 c = a < b;
 c = b > a;
 
+a = a && b;
+a = True && False;
+a = (a < 1) || False;
+a = (b < 1) && (a = c);
+
 d = a < 1 + 2 * 3;

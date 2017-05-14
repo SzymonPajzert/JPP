@@ -2,7 +2,7 @@
 
 module DynamicGrammar where
 
-import Prelude hiding (exp, error)
+import Prelude hiding (exp, error, unlines)
 import Data.List (partition)
 
 import qualified Data.Map.Strict as Map
@@ -34,7 +34,7 @@ instance Eq DynVal where
 data DynVal
   = TInt Integer
   | TBool Bool
-  | TUnapp (DynVal -> DynVal)
+  | TUnapp (DynVal, Var)
 --  | TTuple [DynVal]
 --  identyfikatory typów polimorficznych (listy i booleany będą tutaj)
 
@@ -46,7 +46,65 @@ data Exp
   | EInt Integer
   | EOp Op Exp Exp
   | EVar Var
-  deriving (Show)
+
+instance Show Exp where
+  show exp = runReader (print_indent exp) 0
+
+make_indent :: Int -> String
+make_indent n = take n $ repeat ' '
+
+unlines :: [String] -> String
+unlines [] = []
+unlines [line] = line
+unlines (l:ls) = l ++ ('\n' : (unlines ls))
+
+print_indent :: Exp -> Reader Int String
+print_indent (EApp fun arg) = do
+  funS <- print_indent fun
+  argS <- local (+2) (print_indent arg)
+  return $ unlines [funS,argS]
+ 
+print_indent (EIf cond true false) = do
+  condS <- print_indent cond
+  trueS  <- local (+2) (print_indent true)
+  falseS <- local (+2) (print_indent false)
+  return $ unlines [condS, trueS, falseS]
+
+print_indent (ELet defs finalExp) = do
+  n <- ask
+  let letS = (make_indent n)++"let"
+  defsS <- mapM print_def defs
+  let inS = (make_indent n)++"in"
+  expS <- local (+2) $ print_indent finalExp
+  return $ unlines $ [letS] ++ defsS ++ [inS, expS]
+    where
+      print_def :: Def -> Reader Int String
+      print_def (def, exp) = do
+        n <- ask
+        let defS = (make_indent (n+2)) ++ def ++ " ="
+        expS <- local (+4) (print_indent exp)
+        return $ unlines [defS, expS]
+
+print_indent (ELam exp var) = do
+  n <- ask
+  let varS = (make_indent n) ++ var
+  expS <- local (+2) (print_indent exp)
+  return $ unlines $ [varS, expS]
+
+print_indent (EInt int) = do
+  n <- ask
+  return $ unlines [(make_indent n) ++ (show int)]
+
+print_indent (EVar var) = do
+  n <- ask
+  return $ unlines [(make_indent n) ++ var]
+
+print_indent (EOp op exp1 exp2) = do
+  n <- ask
+  let opS = (make_indent n) ++ show op
+  exp1S <- local (+2) (print_indent exp1)
+  exp2S <- local (+2) (print_indent exp2)
+  return $ unlines [opS, exp1S, exp2S]
 
 type Bindings = Map.Map Var DynVal
 
@@ -111,6 +169,9 @@ desugar (Abs.ELet vdefs exp) = do
 desugar (Abs.EIf cond true false) = (liftM3 EIf) (desugar cond) (desugar true) (desugar false)
 desugar (Abs.ESmal left right) = (liftM2 $ EOp OpLes) (desugar left) (desugar right) 
 desugar (Abs.EEq left right) = (liftM2 $ EOp OpEqu) (desugar left) (desugar right)
+desugar (Abs.EAnd left right) = (liftM2 $ EOp OpAnd) (desugar left) (desugar right)
+desugar (Abs.EOr left right) = (liftM2 $ EOp OpOr) (desugar left) (desugar right)
+
 desugar (Abs.EAdd left right) = (liftM2 $ EOp OpAdd) (desugar left) (desugar right)
 desugar (Abs.ESub left right) = (liftM2 $ EOp OpSub) (desugar left) (desugar right)
 desugar (Abs.EMul left right) = (liftM2 $ EOp OpMul) (desugar left) (desugar right)
@@ -139,10 +200,6 @@ interpret exp = runReader (helpEvalExp exp) baseMap
 addBinding :: Var -> DynVal -> Bindings -> Bindings
 addBinding = Map.insert
 
--- todo really remove
-unsafeExt :: Err a -> a
-unsafeExt (Ok res) = res
-
 trans :: (a -> Reader r b) -> Reader r (a -> b)
 trans f = do
     r <- ask
@@ -168,9 +225,7 @@ helpEvalExp (ELet _ _) = return $ Bad $ show $ UnsupportedMultipleLet
 
 -- DynVal -> Reader Bindings (Err DynVal
 
-helpEvalExp (ELam exp ident) = do
-  r <- ask
-  return $ Ok $ TUnapp $ (\res -> unsafeExt $ runReader (local (addBinding ident res) (helpEvalExp exp)) r)
+helpEvalExp (ELam exp ident) = return $ Ok $ TUnapp (exp, ident)
 
 helpEvalExp (EVar ident) = do
   values <- ask
