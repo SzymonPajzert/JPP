@@ -1,5 +1,5 @@
 function a b =
-  if (a = 1) && (b < 3)
+  if (a = 2) && (b < 3)
   then b + a * 2
   else 4;
 

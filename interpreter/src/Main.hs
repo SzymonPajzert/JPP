@@ -5,42 +5,36 @@
 module Main where
 
 
-import System.IO ( stdin, hGetContents )
-import System.Environment ( getArgs, getProgName )
--- import System.Exit ( exitFailure, exitSuccess )
-
-import LexGrammar
-import ParGrammar
-import SkelGrammar
-import PrintGrammar
+import System.IO ( stderr, hPutStrLn )
+import System.Environment ( getArgs )
 import DynamicGrammar
-import AbsGrammar as Abs
 
 import ErrM
 
-type ParseFun a = [Token] -> Err a
-
-type ProgramGram = [Abs.TopDef]
-type Program = [Dyn.Def]
 
 -- TODO maybe use verbosity of error messages
 type Verbosity = Int
-
-
-
-
-
 
 main :: IO ()
 main = do
   [fileName] <- getArgs
   file <- readFile fileName
 
-  case parse file of
-    Ok absTree ->
-      putStrLn "Parse completed"
-      interpret absTree
-    Bad message -> putStrLn message
+  case parse file >>= desugar_prog of
+    Bad err -> do
+      hPutStrLn stderr "Compilation error:"
+      hPutStrLn stderr err
+    Ok expr -> do
+      case interpret expr of
+        Ok (EVal value) ->
+          putStrLn $ show value
+        Ok expr -> do
+          hPutStrLn stderr "Bad return value"
+          hPutStrLn stderr $ indent expr
+        Bad err -> do
+          hPutStrLn stderr "Runtime error: "
+          hPutStrLn stderr err
+          hPutStrLn stderr $ indent expr
 
 
 

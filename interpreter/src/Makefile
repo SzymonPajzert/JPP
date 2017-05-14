@@ -1,8 +1,14 @@
-all: grammar.cf
+interpreter: Main.hs gram
+	make gram
+	ghc --make Main.hs -o interpreter
+
+gram: grammar.cf
 	bnfc grammar.cf
 	happy -ga$(HAPPY_DEBUG) ParGrammar.y
 	alex -g LexGrammar.x
-	ghc --make TestGrammar.hs -o TestGrammar
+
+
+
 
 clean:
 	-rm -f *.log *.aux *.hi *.o *.dvi

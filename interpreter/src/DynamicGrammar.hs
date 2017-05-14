@@ -2,15 +2,14 @@
 
 module DynamicGrammar where
 
+
 import Prelude hiding (exp, error, unlines)
 import Data.List (partition)
-
 import qualified Data.Map.Strict as Map
 import qualified AbsGrammar as Abs
 import ParGrammar
 import LexGrammar
 import Control.Monad.Reader
--- import AbsGrammar (LIdent)
 
 import ErrM
 
@@ -21,34 +20,67 @@ type ParseFun a = [Token] -> Err a
 type Var = String
 type Def = (Var, Exp)
 
-instance Show DynVal where
-  show (TInt int) = show int
-  show (TBool bool) = show bool
-  show (TUnapp _) = "fun"
-
-instance Eq DynVal where
-  (==) (TInt  a) (TInt  b) = (a == b)
-  (==) (TBool a) (TBool b) = (a == b)
-  (==) _         _         = False
+-- Possible values of binds in map (may be evaluated or not)
+data Binds
+  = Strict DynVal
+  | Lazy Exp
+  deriving (Show)
+  
+data Environment = Environment
+  { bindings :: Map.Map Var Exp
+  , resolve_values :: Bool
+  } deriving (Show)
 
 data DynVal
   = TInt Integer
   | TBool Bool
-  | TUnapp (DynVal, Var)
 --  | TTuple [DynVal]
 --  identyfikatory typów polimorficznych (listy i booleany będą tutaj)
+--deriving (Show, Eq)
 
 data Exp
   = EApp Exp Exp
   | EIf Exp Exp Exp
   | ELet [Def] Exp
   | ELam Exp Var
-  | EInt Integer
   | EOp Op Exp Exp
   | EVar Var
+  | EVal DynVal
+  deriving (Show)
 
-instance Show Exp where
-  show exp = runReader (print_indent exp) 0
+data RuntimeError
+  = AppTypeMismatch FuncId [Exp]
+  | UnboundVar Var Environment
+  | WrongType Exp Exp
+  deriving (Show)
+
+data CompilationError
+  = NoMainDefinition
+  | MultipleDefinitions Var
+  | UnsupportedSyntaxExpr Abs.Exp
+  | UnsupportedSyntaxDef  Abs.VDef
+  deriving (Show)
+
+data FuncId
+  = FuncVar Var
+  | FuncOp  Op
+  deriving (Show)
+
+data Op
+  = OpAdd
+  | OpMul
+  | OpSub
+  | OpAnd
+  | OpOr
+  | OpLes
+  | OpEqu
+  deriving (Show)
+
+return_ :: (Show a, Monad m) => a -> m a
+return_ a = trace (show a) (Prelude.return a)
+
+indent :: Exp -> String
+indent exp = runReader (print_indent exp) 0
 
 make_indent :: Int -> String
 make_indent n = take n $ repeat ' '
@@ -63,7 +95,7 @@ print_indent (EApp fun arg) = do
   funS <- print_indent fun
   argS <- local (+2) (print_indent arg)
   return $ unlines [funS,argS]
- 
+
 print_indent (EIf cond true false) = do
   condS <- print_indent cond
   trueS  <- local (+2) (print_indent true)
@@ -91,10 +123,6 @@ print_indent (ELam exp var) = do
   expS <- local (+2) (print_indent exp)
   return $ unlines $ [varS, expS]
 
-print_indent (EInt int) = do
-  n <- ask
-  return $ unlines [(make_indent n) ++ (show int)]
-
 print_indent (EVar var) = do
   n <- ask
   return $ unlines [(make_indent n) ++ var]
@@ -106,26 +134,9 @@ print_indent (EOp op exp1 exp2) = do
   exp2S <- local (+2) (print_indent exp2)
   return $ unlines [opS, exp1S, exp2S]
 
-type Bindings = Map.Map Var DynVal
-
-data RuntimeError
-  = AppTypeMismatch FuncId [DynVal]
-  | UnsupportedMultipleLet
-  | UnboundVar Var Bindings
-  | WrongType DynVal
-  deriving (Show)
-
-data CompilationError
-  = NoMainDefinition
-  | MultipleDefinitions Var
-  | UnsupportedSyntaxExpr Abs.Exp
-  | UnsupportedSyntaxDef  Abs.VDef
-  deriving (Show)
-
-data FuncId
-  = FuncVar Var
-  | FuncOp  Op
-  deriving (Show)
+print_indent (EVal value) = do
+  n <- ask
+  return $ (make_indent n) ++ show value
 
 parseGen :: ParseFun a -> String -> Err a
 parseGen p s = p $ myLexer s
@@ -179,89 +190,95 @@ desugar (Abs.EMul left right) = (liftM2 $ EOp OpMul) (desugar left) (desugar rig
 desugar (Abs.EApp func value) = (liftM2 EApp) (desugar func) (desugar value)
 -- desugar (ELis _)
 -- desugar (ETup _)
-desugar (Abs.EInt int) = Ok $ EInt int
+desugar (Abs.EInt int) = Ok $ EVal $ TInt int
 desugar (Abs.ECon (Abs.UIdent ident)) = Ok $ EVar ident
 desugar (Abs.EVar (Abs.Ident ident)) = Ok $ EVar ident
 desugar (Abs.ETup [exp]) = desugar exp
-
 
 desugar unsupported = Bad $ show $ UnsupportedSyntaxExpr unsupported
 
 
 
-interpret :: Exp -> Err DynVal
-interpret exp = runReader (helpEvalExp exp) baseMap
+interpret :: Exp -> Err Exp
+interpret exp = runReader (helpEvalExp exp) env
   where
-    baseMap = Map.fromList [("True", TBool True),
-                            ("False", TBool False)
+    baseMap = Map.fromList [("True", EVal $ TBool True),
+                            ("False", EVal $ TBool False)
                            ]
+    env = Environment baseMap True
                       
 
-addBinding :: Var -> DynVal -> Bindings -> Bindings
-addBinding = Map.insert
+addBinding :: Var -> Exp -> Environment -> Environment
+addBinding var exp env = env {bindings = Map.insert var exp (bindings env) }
 
+turn_off_resolving :: Environment -> Environment
+turn_off_resolving env = env { resolve_values = False }
+
+{-
 trans :: (a -> Reader r b) -> Reader r (a -> b)
 trans f = do
     r <- ask
-    return $ \a -> runReader (f a) r
+    Prelude.return $ \a -> runReader (f a) r
+-}
 
-helpEvalExp :: Exp -> Reader Bindings (Err DynVal)
-helpEvalExp (EInt n) = return $ Ok $ TInt n
+substitute :: Var -> Exp -> Exp -> Exp
+substitute varS valS exp = case exp of
+  (EApp exp1 exp2) -> EApp (sub exp1) (sub exp2)
+  (EIf cond true false) -> EIf (sub cond) (sub true) (sub false)
+  (ELam exp var) -> ELam (sub exp) var
+  (EOp op exp1 exp2) -> EOp op (sub exp1) (sub exp2)
+  (EVar var) | var == varS -> valS
+  var @ (EVar _) -> var
+  val @ (EVal _) -> val
+  where sub = substitute varS valS
+
+helpEvalExp :: Exp -> Reader Environment (Err Exp)
+-- helpEvalExp exp | trace ("=========\n" ++ (show exp)) False = undefined
 helpEvalExp (EIf condExp trueExp falseExp) = do
   cond <- helpEvalExp condExp
   case cond of
     Bad err -> return $ Bad err
-    Ok (TBool bool) -> helpEvalExp $ if bool then trueExp else falseExp
+    Ok (EVal (TBool bool)) -> helpEvalExp $ if bool then trueExp else falseExp
     Ok value -> return $ Bad $ show $ AppTypeMismatch (FuncVar "if") ([value])
 
-helpEvalExp (ELet [(ident, value)] exp) = do
-  evalAssigned <- helpEvalExp value
-  case evalAssigned of
-    Ok res -> local (addBinding ident res) (helpEvalExp exp)
-    other -> return other
-  
-helpEvalExp (ELet [] exp) = helpEvalExp exp
-helpEvalExp (ELet _ _) = return $ Bad $ show $ UnsupportedMultipleLet
+helpEvalExp (ELet defs exp) =
+  local (addBindings defs) (helpEvalExp exp)
+  where
+    addBindings :: [(Var, Exp)] -> Environment -> Environment
+    addBindings defs env = foldl (flip (uncurry addBinding)) env defs
 
--- DynVal -> Reader Bindings (Err DynVal
+helpEvalExp lambda @ (ELam _ _) = return $ Ok lambda 
 
-helpEvalExp (ELam exp ident) = return $ Ok $ TUnapp (exp, ident)
-
-helpEvalExp (EVar ident) = do
-  values <- ask
-  return $ case Map.lookup ident values of
-    Nothing -> Bad $ show $ UnboundVar ident values
+helpEvalExp var @ (EVar ident) = do
+  env <- ask
+  return $ case Map.lookup ident (bindings env) of
+    Nothing ->
+      if (resolve_values env)
+      then Bad $ show $ UnboundVar ident env
+      else Ok $ var
     Just value -> Ok $ value
   
 helpEvalExp (EOp op left right) = do
   leftEval <- helpEvalExp left
   rightEval <- helpEvalExp right
-  return $ (liftM2 pair leftEval rightEval) >>= (uncurry (evalOp op))
-
-
-helpEvalExp (EApp funcExp valueExp) = do
-  function <- helpEvalExp funcExp
-  argValue <- helpEvalExp valueExp
+  return $ (liftM2 pair leftEval rightEval) >>= (uncurry (evalOpL op))
   
-  return $ case function of
-    Ok (TUnapp func) -> liftM func argValue
-    value -> case value of
-      Ok val ->  Bad $ show $ WrongType val
-      error -> error
+helpEvalExp (EApp funcExp valueExp) = do
+  funcErr <- local turn_off_resolving (helpEvalExp funcExp)
+  case funcErr of
+    error @ (Bad _)  -> return error 
+    Ok (ELam fun ident) -> (helpEvalExp (substitute ident valueExp fun))
+    Ok value            -> return $ Bad $ show $ WrongType value valueExp
 
+helpEvalExp value @ (EVal _ ) = return $ Ok value
 
 pair :: a -> b -> (a, b)
 pair a b = (a, b)
 
-data Op
-  = OpAdd
-  | OpMul
-  | OpSub
-  | OpAnd
-  | OpOr
-  | OpLes
-  | OpEqu
-  deriving (Show)
+
+evalOpL :: Op -> (Exp -> Exp -> Err Exp)
+evalOpL op (EVal a) (EVal b) = EVal `fmap` (evalOp op a b)
+evalOpL op exp1 exp2 = Bad $ show $ WrongType exp1 (EOp op exp1 exp2)
 
 -- TODO consider instance of appplicative
 -- TODO operators are translated to functions: + ==> _plus
@@ -274,7 +291,16 @@ evalOp OpOr  (TBool a) (TBool b) = Ok $ TBool (a || b)
 evalOp OpLes (TInt a) (TInt b) = Ok $ TBool (a < b)
 -- evalOp OpGre (TInt a) (TInt b) = Ok $ TBool (a > b)
 evalOp OpEqu (TInt a) (TInt b) = Ok $ TBool (a == b)
-evalOp op arg1 arg2 = Bad $ show $ AppTypeMismatch (FuncOp op) [arg1, arg2]
+evalOp op arg1 arg2 = Bad $ show $ AppTypeMismatch (FuncOp op) [EVal arg1, EVal arg2]
+
+{-                     INSTANCES                      -}
 
 
+instance Show DynVal where
+  show (TInt int) = show int
+  show (TBool bool) = show bool
 
+instance Eq DynVal where
+  (==) (TInt  a) (TInt  b) = (a == b)
+  (==) (TBool a) (TBool b) = (a == b)
+  (==) _         _         = False
