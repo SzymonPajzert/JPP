@@ -28,3 +28,13 @@ cabal.project.local
 **/Makefile.bu
 **/ParGrammar.y
 **/TestGrammar
+
+interpreter/src/AbsGrammar.hs
+interpreter/src/ErrM.hs
+interpreter/src/LexGrammar.hs
+interpreter/src/ParGrammar.hs
+interpreter/src/PrintGrammar.hs
+interpreter/src/SkelGrammar.hs
+interpreter/src/TestGrammar.hs
+interpreter/src/interpret_test
+interpreter/src/interpreter

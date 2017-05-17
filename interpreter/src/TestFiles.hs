@@ -5,33 +5,40 @@ module Main where
 import Prelude hiding (log)
 import System.Console.ANSI
 import Control.Monad.Writer
-import DynamicGrammar
-import ErrM
+import Data.Maybe (fromMaybe)
 
-testFilesPairs :: [(String, DynVal)]
+import DynGrammar
+import Compile
+import Util
+
+import Err
+
+testFilesPairs :: [(String, Maybe DynVal)]
 testFilesPairs = [
-  ("good/1.ad", TInt 5),
-  ("good/2.ad", TInt 4),
-  ("good/3.ad", TInt 5),
-  ("good/fib.ad", TInt 8),
-  ("good/mut_rec.ad", TInt 8),
-  ("good/lazy_if.ad", TInt 0)
+  ("good/1.ad", Just $ TInt 5),
+  ("good/2.ad", Just $ TInt 4),
+  ("good/3.ad", Just $ TInt 5),
+  ("good/fib.ad", Just $ TInt 8),
+  ("good/mut_rec.ad", Just $ TInt 8),
+  ("good/lazy_if.ad", Just $ TInt 0),
+  ("good/call_by_need.ad", Nothing),
+  ("good/closures.ad", Just $ TBool True)
   ]
 
 log :: String -> Writer [String] ()
 log string = tell [string]
 
-helpTestFile :: String -> DynVal -> Writer [String] Bool
+helpTestFile :: String -> Maybe DynVal -> Writer [String] Bool
 helpTestFile fileCont expectedResult =
   case parse fileCont >>= desugar_prog of
      Bad err -> do
        log "Compilation error:"
-       log err
+       log $ show err
        return False
      Ok expr -> do
        case interpret expr of
          Ok (EVal value) ->
-           if value == expectedResult then do
+           if True `fromMaybe` ((==value) `fmap` expectedResult) then do
                log "Ok"
                return True
            else do
@@ -44,12 +51,11 @@ helpTestFile fileCont expectedResult =
            return $ False
          Bad err -> do
            log "Runtime error: "
-           log err
+           log $ show err
            log $ indent expr
            return False
 
--- TODO change to monad writer to save the logs, print header in right color and print logs.
-testFile :: String -> DynVal -> IO ()
+testFile :: String -> Maybe DynVal -> IO ()
 testFile file expectedResult = do
   fileCont <- readFile file
   let (result, logs) = runWriter $ helpTestFile fileCont expectedResult
@@ -60,15 +66,6 @@ testFile file expectedResult = do
   setSGR [Reset]
 
   mapM_ putStrLn logs
-
-  {-
-  result <- (case parse fileCont >>= desugar_prog of
-    Bad err -> do
-      putStrLn "Compilation error:"
-      putStrLn err
-      return False
-    
-  -}
 
 main :: IO ()
 main = do

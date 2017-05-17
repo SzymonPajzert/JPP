@@ -1,0 +1,13 @@
+x = 1;
+
+inc1 y = let {
+	 suma a b = a + b;
+	 } suma 1 y;
+
+dodaj a b = a + b;
+
+inc2 = dodaj 1;
+
+test x = (inc1 x) = (inc2 x);
+
+main = (test 5) && ( test 10 ) && (test 0); 

@@ -1,11 +1,16 @@
+all: interpreter interpret_test
+
 interpreter: Main.hs gram
-	make gram
 	ghc --make Main.hs -o interpreter
+
+interpret_test: DynGrammar.hs Compile.hs TestFiles.hs gram
+	ghc --make TestFiles.hs -o interpret_test
 
 gram: grammar.cf
 	bnfc grammar.cf
 	happy -ga$(HAPPY_DEBUG) ParGrammar.y
 	alex -g LexGrammar.x
+	ghc --make TestGrammar.hs -o TestGrammar
 
 
 

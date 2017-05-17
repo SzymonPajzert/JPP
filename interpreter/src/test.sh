@@ -7,11 +7,12 @@ make
 
 rm -r res
 mkdir -p res/parseable
+mkdir -p res/good/
 mkdir -p res/bad
 
 fail_count=0
 
-for file in parseable/* ; do
+for file in {good,parseable}/* ; do
     echo -n "testing $file:   "
 	if [[ `printf $file | tail -c 3` == "new" ]]; then
 		echo ""
