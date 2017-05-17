@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -O2 -Wall -fwarn-tabs -fdefer-typed-holes #-}
 
-module DynGrammar (interpret, DynVal(..), Exp(..)) where
+module DynGrammar (interpret, Exp(..)) where
 
 
 import Prelude hiding (exp, error, unlines)
@@ -9,11 +9,6 @@ import Control.Monad.Reader
 
 import Exp
 import Err
-
-data Binds
-  = Strict DynVal
-  | Lazy Exp
-  deriving (Show)
   
 data Environment = Environment
   { bindings :: Map.Map Var Exp
@@ -37,8 +32,8 @@ data FuncId
 interpret :: Exp -> RunErr Exp
 interpret exp = runReader (helpEvalExp exp) env
   where
-    baseMap = Map.fromList [("True", EVal $ TBool True),
-                            ("False", EVal $ TBool False)
+    baseMap = Map.fromList [("True", EBool True),
+                            ("False", EBool False)
                            ]
     env = Environment baseMap True
                       
@@ -46,26 +41,23 @@ interpret exp = runReader (helpEvalExp exp) env
 addBinding :: Var -> Exp -> Environment -> Environment
 addBinding var exp env = env {bindings = Map.insert var exp (bindings env) }
 
+{- TODO remove
 turn_off_resolving :: Environment -> Environment
 turn_off_resolving env = env { resolve_values = False }
-
-{-
-trans :: (a -> Reader r b) -> Reader r (a -> b)
-trans f = do
-    r <- ask
-    Prelude.return $ \a -> runReader (f a) r
 -}
 
 substitute :: Var -> Exp -> Exp -> Exp
 substitute varS valS exp = case exp of
-  (ELet defs exp) -> ELet defs (sub exp)
+  (ELet defs mainExp) -> ELet defs (sub mainExp)
   (EApp exp1 exp2) -> EApp (sub exp1) (sub exp2)
   (EIf cond true false) -> EIf (sub cond) (sub true) (sub false)
-  (ELam exp var) -> ELam (sub exp) var
+  (ELam lamExp var) -> ELam (sub lamExp) var
   (EOp op exp1 exp2) -> EOp op (sub exp1) (sub exp2)
   (EVar var) | var == varS -> valS
+  (ETup tuple) -> ETup (map sub tuple)
   var @ (EVar _) -> var
-  val @ (EVal _) -> val
+  val @ (EInt _) -> val
+  val @ (EBool _) -> val
   where sub = substitute varS valS
 
 helpEvalExp :: Exp -> Reader Environment (RunErr Exp)
@@ -73,14 +65,14 @@ helpEvalExp (EIf condExp trueExp falseExp) = do
   cond <- helpEvalExp condExp
   case cond of
     Bad err -> return $ Bad err
-    Ok (EVal (TBool bool)) -> helpEvalExp $ if bool then trueExp else falseExp
+    Ok (EBool bool) -> helpEvalExp $ if bool then trueExp else falseExp
     Ok value -> return $ Bad $ AppTypeMismatch (FuncVar "if") ([value])
 
 helpEvalExp (ELet defs exp) =
   local (addBindings defs) (helpEvalExp exp)
   where
     addBindings :: [(Var, Exp)] -> Environment -> Environment
-    addBindings defs env = foldl (flip (uncurry addBinding)) env defs
+    addBindings anyDefs env = foldl (flip (uncurry addBinding)) env anyDefs
 
 helpEvalExp lambda @ (ELam _ _) = return $ Ok lambda 
 
@@ -96,7 +88,7 @@ helpEvalExp var @ (EVar ident) = do
 helpEvalExp (EOp op left right) = do
   leftEval <- helpEvalExp left
   rightEval <- helpEvalExp right
-  return $ (liftM2 pair leftEval rightEval) >>= (uncurry (evalOpL op))
+  return $ (liftM2 pair leftEval rightEval) >>= (uncurry (evalOp op))
   
 helpEvalExp (EApp funcExp valueExp) = do
   funcErr <- helpEvalExp funcExp
@@ -105,25 +97,23 @@ helpEvalExp (EApp funcExp valueExp) = do
     Ok (ELam fun ident) -> (helpEvalExp (substitute ident valueExp fun))
     Ok value            -> return $ Bad $ WrongType value valueExp
 
-helpEvalExp value @ (EVal _ ) = return $ Ok value
+helpEvalExp (ETup tuple) = do
+  first <- sequence $ map helpEvalExp tuple
+  return $ ETup `fmap` sequence first
+
+helpEvalExp value = return $ Ok value
 
 pair :: a -> b -> (a, b)
 pair a b = (a, b)
 
-
-evalOpL :: Op -> (Exp -> Exp -> RunErr Exp)
-evalOpL op (EVal a) (EVal b) = EVal `fmap` (evalOp op a b) 
-evalOpL op exp1 exp2 = Bad $  WrongType exp1 (EOp op exp1 exp2) 
-
 -- TODO consider instance of appplicative
 -- TODO operators are translated to functions: + ==> _plus
-evalOp :: Op -> (DynVal -> DynVal -> RunErr DynVal)
-evalOp OpAdd (TInt a) (TInt b) = Ok $ TInt (a + b)
-evalOp OpMul (TInt a) (TInt b) = Ok $ TInt (a * b)
-evalOp OpSub (TInt a) (TInt b) = Ok $ TInt (a - b)
-evalOp OpAnd (TBool a) (TBool b) = Ok $ TBool (a && b) 
-evalOp OpOr  (TBool a) (TBool b) = Ok $ TBool (a || b)
-evalOp OpLes (TInt a) (TInt b) = Ok $ TBool (a < b)
--- evalOp OpGre (TInt a) (TInt b) = Ok $ TBool (a > b)
-evalOp OpEqu (TInt a) (TInt b) = Ok $ TBool (a == b)
-evalOp op arg1 arg2 = Bad $ AppTypeMismatch (FuncOp op) [EVal arg1, EVal arg2]
+evalOp :: Op -> (Exp -> Exp -> RunErr Exp)
+evalOp OpAdd (EInt a) (EInt b) = Ok $ EInt (a + b)
+evalOp OpMul (EInt a) (EInt b) = Ok $ EInt (a * b)
+evalOp OpSub (EInt a) (EInt b) = Ok $ EInt (a - b)
+evalOp OpAnd (EBool a) (EBool b) = Ok $ EBool (a && b) 
+evalOp OpOr  (EBool a) (EBool b) = Ok $ EBool (a || b)
+evalOp OpLes (EInt a) (EInt b) = Ok $ EBool (a < b)
+evalOp OpEqu (EInt a) (EInt b) = Ok $ EBool (a == b)
+evalOp op arg1 arg2 = Bad $ AppTypeMismatch (FuncOp op) [arg1, arg2]

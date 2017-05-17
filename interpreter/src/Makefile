@@ -7,9 +7,9 @@ interpret_test: DynGrammar.hs Compile.hs TestFiles.hs gram
 	ghc --make TestFiles.hs -o interpret_test
 
 gram: grammar.cf
-	bnfc grammar.cf
-	happy -ga$(HAPPY_DEBUG) ParGrammar.y
-	alex -g LexGrammar.x
+	bnfc grammar.cf >/dev/null
+	happy -ga$(HAPPY_DEBUG) ParGrammar.y >/dev/null
+	alex -g LexGrammar.x >/dev/null
 	ghc --make TestGrammar.hs -o TestGrammar
 
 

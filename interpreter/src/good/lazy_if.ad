@@ -3,9 +3,11 @@ fib x =
 	then 1
 	else fib (x - 1) + fib (x - 2);
 
-main = if True
+res = if True
 	   then
 	   	  if False
 		  then fib 2000000
 		  else 0
 	   else fib 100000;
+
+main = (res = 0);

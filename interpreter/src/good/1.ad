@@ -3,4 +3,4 @@ function a b =
   then b + a * 2
   else 4;
 
-main = function 2 1;
+main = (function 2 1) = 5;

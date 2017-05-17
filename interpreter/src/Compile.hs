@@ -2,6 +2,7 @@
 
 module Compile where
 
+import Prelude hiding (exp)
 import Data.List (partition)
 import Control.Monad (liftM2, liftM3)
 
@@ -78,9 +79,10 @@ desugar (Abs.EMul left right) = (liftM2 $ EOp OpMul) (desugar left) (desugar rig
 -- desugar (Abs.Cons _ _)
 desugar (Abs.EApp func value) = (liftM2 EApp) (desugar func) (desugar value)
 -- desugar (ELis _)
-desugar (Abs.EInt int) = Ok $ EVal $ TInt int
+desugar (Abs.EInt int) = Ok $ EInt int
 desugar (Abs.ECon (Abs.UIdent ident)) = Ok $ EVar ident
 desugar (Abs.EVar (Abs.Ident ident)) = Ok $ EVar ident
 desugar (Abs.ETup [exp]) = desugar exp
+desugar (Abs.ETup exps) = ETup `fmap` (sequence (map desugar exps))
 
-desugar unsupported = Bad $ UnsupportedSyntaxExpr unsupported
+-- desugar unsupported = Bad $ UnsupportedSyntaxExpr unsupported

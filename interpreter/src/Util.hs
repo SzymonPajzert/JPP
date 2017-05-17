@@ -1,6 +1,6 @@
 module Util where
 
-import Prelude hiding (unlines)
+import Prelude hiding (unlines, exp)
 import Control.Monad.Reader
 import Exp
 
@@ -36,10 +36,10 @@ print_indent (ELet defs finalExp) = do
   return $ unlines $ [letS] ++ defsS ++ [inS, expS]
     where
       print_def :: Def -> Reader Int String
-      print_def (def, exp) = do
+      print_def (def, value) = do
         n <- ask
         let defS = (make_indent (n+2)) ++ def ++ " ="
-        expS <- local (+4) (print_indent exp)
+        expS <- local (+4) (print_indent value)
         return $ unlines [defS, expS]
 
 print_indent (ELam exp var) = do
@@ -59,6 +59,14 @@ print_indent (EOp op exp1 exp2) = do
   exp2S <- local (+2) (print_indent exp2)
   return $ unlines [opS, exp1S, exp2S]
 
-print_indent (EVal value) = do
+print_indent (EInt value) = do
   n <- ask
   return $ (make_indent n) ++ show value
+
+print_indent (EBool bool) = do
+  n <- ask
+  return $ (make_indent n) ++ show bool
+
+print_indent (ETup tuple) = do
+  n <- ask
+  return $ (make_indent n) ++ (unwords (map show tuple)) 

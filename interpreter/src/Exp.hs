@@ -1,6 +1,6 @@
 module Exp where
 
-import Prelude (Show, Eq, show, String, Integer, Bool(..), (==))
+import Prelude hiding (exp)
 
 type Var = String
 type Def = (Var, Exp)
@@ -15,22 +15,6 @@ data Op
   | OpEqu
   deriving (Show)
 
-data DynVal
-  = TInt Integer
-  | TBool Bool
-  | TTuple [DynVal]
---  identyfikatory typów polimorficznych (listy i booleany będą tutaj)
---deriving (Show, Eq)
-
-instance Show DynVal where
-  show (TInt int) = show int
-  show (TBool bool) = show bool
-
-instance Eq DynVal where
-  (==) (TInt  a) (TInt  b) = (a == b)
-  (==) (TBool a) (TBool b) = (a == b)
-  (==) _         _         = False
-
 data Exp
   = EApp Exp Exp
   | EIf Exp Exp Exp
@@ -38,6 +22,20 @@ data Exp
   | ELam Exp Var
   | EOp Op Exp Exp
   | EVar Var
-  | EVal DynVal
+  | EInt Integer
+  | EBool Bool
+  | ETup [Exp]
   deriving (Show)
 
+is_basic :: Exp -> Bool
+is_basic exp = case exp of
+  EInt  _ -> True
+  EBool _ -> True
+  ETup  _ -> True
+  _       -> False
+
+instance Eq Exp where
+  (==) (EInt  a) (EInt  b) = (a == b)
+  (==) (EBool a) (EBool b) = (a == b)
+  (==) (ETup  a) (ETup  b) = (a == b)
+  (==) _         _         = False

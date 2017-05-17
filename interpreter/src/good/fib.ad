@@ -3,4 +3,4 @@ fib x =
 	then 1
 	else fib (x - 1) + fib (x - 2);
 
-main = fib 5;
+main = (fib 5) = 8;

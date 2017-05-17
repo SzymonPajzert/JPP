@@ -5,7 +5,6 @@ module Main where
 import Prelude hiding (log)
 import System.Console.ANSI
 import Control.Monad.Writer
-import Data.Maybe (fromMaybe)
 
 import DynGrammar
 import Compile
@@ -13,38 +12,35 @@ import Util
 
 import Err
 
-testFilesPairs :: [(String, Maybe DynVal)]
+testFilesPairs :: [String]
 testFilesPairs = [
-  ("good/1.ad", Just $ TInt 5),
-  ("good/2.ad", Just $ TInt 4),
-  ("good/3.ad", Just $ TInt 5),
-  ("good/fib.ad", Just $ TInt 8),
-  ("good/mut_rec.ad", Just $ TInt 8),
-  ("good/lazy_if.ad", Just $ TInt 0),
-  ("good/call_by_need.ad", Nothing),
-  ("good/closures.ad", Just $ TBool True)
+  "good/1.ad",
+  "good/2.ad",
+  "good/3.ad",
+  "good/fib.ad",
+  "good/mut_rec.ad",
+  "good/lazy_if.ad",
+  "good/closures.ad",
+  "good/fast_fib.ad"
+  
+  -- "good/call_by_need.ad"
   ]
 
 log :: String -> Writer [String] ()
 log string = tell [string]
 
-helpTestFile :: String -> Maybe DynVal -> Writer [String] Bool
-helpTestFile fileCont expectedResult =
+helpTestFile :: String -> Writer [String] Bool
+helpTestFile fileCont =
   case parse fileCont >>= desugar_prog of
      Bad err -> do
        log "Compilation error:"
        log $ show err
        return False
-     Ok expr -> do
-       case interpret expr of
-         Ok (EVal value) ->
-           if True `fromMaybe` ((==value) `fmap` expectedResult) then do
-               log "Ok"
-               return True
-           else do
-             log $ "Wrong answer " ++ (show value) ++ " instead of " ++ (show expectedResult)
-             log $ indent expr
-             return False
+     Ok prog -> do
+       case interpret prog of
+         Ok (EBool True) -> do
+           log "Ok"
+           return True
          Ok expr -> do
            log "Bad return value"
            log $ indent expr
@@ -52,13 +48,13 @@ helpTestFile fileCont expectedResult =
          Bad err -> do
            log "Runtime error: "
            log $ show err
-           log $ indent expr
+           log $ indent prog
            return False
 
-testFile :: String -> Maybe DynVal -> IO ()
-testFile file expectedResult = do
+testFile :: String -> IO ()
+testFile file = do
   fileCont <- readFile file
-  let (result, logs) = runWriter $ helpTestFile fileCont expectedResult
+  let (result, logs) = runWriter $ helpTestFile fileCont
 
   let color = if result then Green else Red
   setSGR [SetColor Foreground Vivid color]
@@ -69,5 +65,5 @@ testFile file expectedResult = do
 
 main :: IO ()
 main = do
-  mapM_ (uncurry testFile) testFilesPairs
+  mapM_ testFile testFilesPairs
 
