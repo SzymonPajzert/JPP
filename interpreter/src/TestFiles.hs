@@ -22,7 +22,7 @@ testFilesPairs = [
   "good/lazy_if.ad",
   "good/closures.ad",
   "good/fast_fib.ad"
-  
+  -- "good/tuple.ad"
   -- "good/call_by_need.ad"
   ]
 
@@ -31,7 +31,7 @@ log string = tell [string]
 
 helpTestFile :: String -> Writer [String] Bool
 helpTestFile fileCont =
-  case parse fileCont >>= desugar_prog of
+  case parse fileCont >>= desugarProg of
      Bad err -> do
        log "Compilation error:"
        log $ show err

@@ -1,0 +1,16 @@
+fib_help (fst, snd) n = if n = 0 then fst else fib_help (snd, fst + snd) (n-1);
+
+fib1 n = fib_help (1, 1) n;
+
+fib2 = fib_help (1, 1);
+
+fib3 = let {
+	 help (fst, snd) n =
+	 	  if n = 0
+		  then fst
+		  else help (snd, fst + snd) (n-1);
+	} help (1, 1);
+
+test n = (fib1 n) = (fib2 n) && (fib2 n) = (fib3 n);
+
+main = (test 5) && (test 10000) && (test 1);

@@ -15,11 +15,18 @@ data Op
   | OpEqu
   deriving (Show)
 
+data Bind
+  = BIgnore
+  | BVar Var             -- variable binding (TODO remove and merger with tuple)
+  | BTup [Bind]          -- tuple binding
+  | BPol String [Bind]   -- polymorphic type binding
+  deriving (Show)
+
 data Exp
   = EApp Exp Exp
   | EIf Exp Exp Exp
   | ELet [Def] Exp
-  | ELam Exp Var
+  | ELam Exp Bind
   | EOp Op Exp Exp
   | EVar Var
   | EInt Integer

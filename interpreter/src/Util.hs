@@ -44,7 +44,7 @@ print_indent (ELet defs finalExp) = do
 
 print_indent (ELam exp var) = do
   n <- ask
-  let varS = (make_indent n) ++ var
+  let varS = (make_indent n) ++ (show var)
   expS <- local (+2) (print_indent exp)
   return $ unlines $ [varS, expS]
 

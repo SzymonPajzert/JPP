@@ -9,10 +9,17 @@ import Control.Monad.Reader
 
 import Exp
 import Err
+import Util (unlines)
+
+newtype Bindings = Bindings { getMap :: (Map.Map Var Exp) }
+
+instance Show Bindings where
+  show (Bindings bindMap) = unlines $ map represent (Map.toList bindMap)
+    where represent (var, exp) = var ++ " -> " ++ (show exp)
   
 data Environment = Environment
-  { bindings :: Map.Map Var Exp
-  , resolve_values :: Bool
+  { bindings :: Bindings
+-- TODO remove  , resolve_values :: Bool
   } deriving (Show)
 
 type RunErr = Err RuntimeError
@@ -21,6 +28,7 @@ data RuntimeError
   = AppTypeMismatch FuncId [Exp]
   | UnboundVar Var Environment
   | WrongType Exp Exp
+  | MatchError
   deriving (Show)
 
 data FuncId
@@ -35,16 +43,43 @@ interpret exp = runReader (helpEvalExp exp) env
     baseMap = Map.fromList [("True", EBool True),
                             ("False", EBool False)
                            ]
-    env = Environment baseMap True
+    env = Environment (Bindings baseMap)
                       
 
 addBinding :: Var -> Exp -> Environment -> Environment
-addBinding var exp env = env {bindings = Map.insert var exp (bindings env) }
+addBinding var exp env = env {bindings = Bindings (Map.insert var exp (getMap $ bindings env)) }
+
+getBinding :: Var -> Reader Environment (Maybe Exp)
+getBinding ident = do
+  bindMap <- asks (getMap . bindings)
+  return $ Map.lookup ident bindMap
+
 
 {- TODO remove
 turn_off_resolving :: Environment -> Environment
 turn_off_resolving env = env { resolve_values = False }
 -}
+
+safeZip :: [a] -> [b] -> Maybe [(a, b)]
+safeZip (a:as) (b:bs) = fmap ((:) (a, b)) $ safeZip as bs
+safeZip []     []     = Just []
+safeZip _      _      = Nothing
+
+bindValues :: Bind -> Exp -> Maybe [(Var, Exp)]
+bindValues BIgnore      _   = Just []
+bindValues (BVar var)   exp = Just [(var, exp)]
+bindValues (BTup binds) (ETup exps) = do
+  pairs <- safeZip binds exps
+  toConcat <- sequence $ map (uncurry bindValues) pairs
+  return $ concat toConcat
+bindValues (BTup _)     _   = Nothing
+
+tryBinds :: [Bind] -> Exp -> Maybe [(Var, Exp)]
+tryBinds []     _   = Nothing
+tryBinds (b:bs) exp = case bindValues b exp of
+  Nothing -> tryBinds bs exp
+  result  -> result
+
 
 substitute :: Var -> Exp -> Exp -> Exp
 substitute varS valS exp = case exp of
@@ -77,12 +112,11 @@ helpEvalExp (ELet defs exp) =
 helpEvalExp lambda @ (ELam _ _) = return $ Ok lambda 
 
 helpEvalExp var @ (EVar ident) = do
-  env <- ask
-  case Map.lookup ident (bindings env) of
-    Nothing ->
-      if (resolve_values env)
-      then return $ Bad $ UnboundVar ident env
-      else return $ Ok $ var
+  bindMaybe <- getBinding ident
+  case bindMaybe of
+    Nothing -> do
+      env <- ask
+      return $ Bad $ UnboundVar ident env
     Just value -> helpEvalExp value
   
 helpEvalExp (EOp op left right) = do
@@ -94,8 +128,12 @@ helpEvalExp (EApp funcExp valueExp) = do
   funcErr <- helpEvalExp funcExp
   case funcErr of
     error @ (Bad _)  -> return error 
-    Ok (ELam fun ident) -> (helpEvalExp (substitute ident valueExp fun))
-    Ok value            -> return $ Bad $ WrongType value valueExp
+    Ok (ELam fun bind) -> case (bindValues bind valueExp) of
+      Nothing        -> return $ Bad MatchError
+      Just valPairs  ->
+        let subExp = foldl (flip (uncurry substitute)) fun valPairs
+        in helpEvalExp subExp
+    Ok value           -> return $ Bad $ WrongType value valueExp
 
 helpEvalExp (ETup tuple) = do
   first <- sequence $ map helpEvalExp tuple

@@ -25,7 +25,8 @@ token LIdent '`'(lower)		  		  		 ; -- lower letters - type parameters
 --- pattern matching is available in function definition
 --- mulitple definitions of function represent different cases - cases are tried top down
 
-Def. VDef ::= Ident [Bind1] "=" Exp ;
+VDef. VDef ::= Ident [Bind1] "=" Exp ;
+--- TODO support VPar. VDef ::= Bind1         "=" Exp ;
 separator nonempty Ident "" ;
 
 separator nonempty MCase "" ;

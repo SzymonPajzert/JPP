@@ -3,13 +3,13 @@
 module Compile where
 
 import Prelude hiding (exp)
-import Data.List (partition)
+import Data.List (partition, nub)
 import Control.Monad (liftM2, liftM3)
 
 import qualified AbsGrammar as Abs
 import ParGrammar
 import LexGrammar
-import qualified ErrM
+import qualified ErrM (Err(..))
 
 import Err
 import Exp
@@ -18,9 +18,8 @@ type ComErr = Err CompilationError
 data CompilationError
   = NoMainDefinition
   | MultipleDefinitions Var
-  | UnsupportedSyntaxExpr Abs.Exp
-  | UnsupportedSyntaxDef  Abs.VDef
   | ParseError String
+  | MultipleDefinitionsBinds
   deriving (Show)
 
 type ParseFun a = [Token] -> ErrM.Err a
@@ -34,10 +33,10 @@ parse fileCont = case parseGen pListTopDef fileCont of
   ErrM.Bad string -> Bad $ ParseError string
   ErrM.Ok program -> Ok program
   
-desugar_prog :: Program -> ComErr Exp
-desugar_prog program = do
+desugarProg :: Program -> ComErr Exp
+desugarProg program = do
     let vdefs = program >>= extract_vdef
-    defs <- desugar_vdefs vdefs
+    defs <- desugarVdefs vdefs
     let 
     case partition (\(name, _) -> name == "main") defs of
       ([(_, main)], rest) -> return $ ELet rest main
@@ -47,24 +46,60 @@ desugar_prog program = do
       extract_vdef (Abs.VarDef vdef) = [vdef]
       extract_vdef _                 = []
 
-desugar_vdefs :: [Abs.VDef] -> ComErr [Def]
-desugar_vdefs vdefs = sequence $ map desugar_vdef vdefs
+desugarVdefs :: [Abs.VDef] -> ComErr [Def]
+desugarVdefs vdefs = do
+  toFlat <- sequence $ (map desugarVdef vdefs)
+  return $ concat toFlat
     
-desugar_vdef :: Abs.VDef -> ComErr Def
-desugar_vdef def@(Abs.Def (Abs.Ident ident) binds exp) = lambda
+desugarVdef :: Abs.VDef -> ComErr [Def]
+desugarVdef (Abs.VDef (Abs.Ident ident) binds exp) = lambda
   where
     lambda = do
       bound <- foldr add_bind (desugar exp) binds
-      return $ (ident, bound)
+      return $ [(ident, bound)]
     add_bind :: Abs.Bind -> ComErr Exp -> ComErr Exp
-    add_bind (Abs.BVar (Abs.Ident bind_ident)) (Ok result) = Ok $ ELam result bind_ident
-    add_bind _                                 err@(Bad _) = err
-    add_bind _                                 _           = Bad $ UnsupportedSyntaxDef def
+    add_bind bind (Ok result) = do
+      bitterBind <- desugarBind bind
+      Ok $ ELam result bitterBind
+    add_bind _    err@(Bad _) = err
+
+{-
+desugarVdef (Abs.VPat bind exp) = do
+  bitterBind <- desugar bind
+  case bitterBind of
+-}
+
+desugarBind :: Abs.Bind -> ComErr Bind
+desugarBind bind = if uniqueIdents bind then case bind of
+  Abs.BVar (Abs.Ident ident) -> Ok $ BVar ident
+  Abs.BTup [ident]           -> desugarBind ident
+  Abs.BTup idents  -> do
+    newIdents <- sequence $ map desugarBind idents
+    return $ BTup newIdents
+  else Bad MultipleDefinitionsBinds
+
+uniqueIdents :: Abs.Bind -> Bool
+uniqueIdents bind = unique $ extractVars bind
+  where
+    extractVars anyBind = case anyBind of
+      Abs.BLis binds         -> binds >>= extractVars
+      Abs.BTup binds         -> binds >>= extractVars
+      Abs.BCon _ binds       -> binds >>= extractVars
+
+      Abs.BULis head tail    -> [head,tail] >>= extractVars
+
+      Abs.BVar (Abs.Ident ident) -> [ident]
+      Abs.BInt _             -> []
+      Abs.BSkip              -> []
+
+    unique list = (nub list) == list
+
+
 
 desugar :: (Abs.Exp) -> ComErr Exp
 -- desugar (Abs.EMat _)
 desugar (Abs.ELet vdefs exp) = do
-  defs <- desugar_vdefs vdefs
+  defs <- desugarVdefs vdefs
   dexp <- desugar exp
   return $ ELet defs dexp
 desugar (Abs.EIf cond true false) = (liftM3 EIf) (desugar cond) (desugar true) (desugar false)
