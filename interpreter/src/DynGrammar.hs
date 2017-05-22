@@ -11,16 +11,16 @@ import Exp
 import Err
 import Util (unlines)
 
-newtype Bindings = Bindings { getMap :: (Map.Map Var Exp) }
+type ExpEnv = (Exp, Environment)
+
+newtype Bindings = Bindings { getMap :: (Map.Map Var ExpEnv) }
 
 instance Show Bindings where
   show (Bindings bindMap) = unlines $ map represent (Map.toList bindMap)
     where represent (var, exp) = var ++ " -> " ++ (show exp)
   
 data Environment = Environment
-  { bindings :: Bindings
--- TODO remove  , resolve_values :: Bool
-  } deriving (Show)
+  { bindings :: Bindings } deriving (Show)
 
 type RunErr = Err RuntimeError
 
@@ -36,29 +36,29 @@ data FuncId
   | FuncOp  Op
   deriving (Show)
 
+emptyEnv :: Environment
+emptyEnv = Environment $ Bindings Map.empty
 
 interpret :: Exp -> RunErr Exp
-interpret exp = runReader (helpEvalExp exp) env
+interpret exp = runReader (helpEvalExp exp) env >>= (return . fst)
   where
-    baseMap = Map.fromList [("True", EBool True),
-                            ("False", EBool False)
+    baseMap = Map.fromList [("True", (EBool True, emptyEnv)),
+                            ("False", (EBool False, emptyEnv))
                            ]
     env = Environment (Bindings baseMap)
                       
 
-addBinding :: Var -> Exp -> Environment -> Environment
+addBinding :: Var -> ExpEnv -> Environment -> Environment
 addBinding var exp env = env {bindings = Bindings (Map.insert var exp (getMap $ bindings env)) }
 
-getBinding :: Var -> Reader Environment (Maybe Exp)
+getBinding :: Var -> Reader Environment (Maybe ExpEnv)
 getBinding ident = do
   bindMap <- asks (getMap . bindings)
   return $ Map.lookup ident bindMap
 
-
-{- TODO remove
-turn_off_resolving :: Environment -> Environment
-turn_off_resolving env = env { resolve_values = False }
--}
+-- | Merge two environments, first one has precedence in case of conflicts
+mergeEnv :: Environment -> Environment -> Environment
+mergeEnv env1 env2 = Environment $ Bindings ((getMap $ bindings env1) `Map.union` (getMap $ bindings env2))
 
 safeZip :: [a] -> [b] -> Maybe [(a, b)]
 safeZip (a:as) (b:bs) = fmap ((:) (a, b)) $ safeZip as bs
@@ -95,51 +95,69 @@ substitute varS valS exp = case exp of
   val @ (EBool _) -> val
   where sub = substitute varS valS
 
-helpEvalExp :: Exp -> Reader Environment (RunErr Exp)
+helpEvalExp :: Exp -> Reader Environment (RunErr ExpEnv)
 helpEvalExp (EIf condExp trueExp falseExp) = do
   cond <- helpEvalExp condExp
   case cond of
     Bad err -> return $ Bad err
-    Ok (EBool bool) -> helpEvalExp $ if bool then trueExp else falseExp
-    Ok value -> return $ Bad $ AppTypeMismatch (FuncVar "if") ([value])
+    Ok ((EBool bool), _) -> helpEvalExp $ if bool then trueExp else falseExp
+    Ok (value, _) -> return $ Bad $ AppTypeMismatch (FuncVar "if") ([value])
 
-helpEvalExp (ELet defs exp) =
-  local (addBindings defs) (helpEvalExp exp)
-  where
-    addBindings :: [(Var, Exp)] -> Environment -> Environment
-    addBindings anyDefs env = foldl (flip (uncurry addBinding)) env anyDefs
+helpEvalExp (ELet defs exp) = do
+  env <- ask
 
-helpEvalExp lambda @ (ELam _ _) = return $ Ok lambda 
+  let bindEnv (var, exp) = (var, (exp, env))
+  let addBindings anyDefs env = foldl (flip (uncurry addBinding)) env (map bindEnv anyDefs)
+  let newEnv = addBindings defs env
 
-helpEvalExp var @ (EVar ident) = do
+  evalPair <- local (mergeEnv newEnv) (helpEvalExp exp)
+  case evalPair of
+    Ok (evalExp, _) -> return $ Ok (evalExp, newEnv)
+    err @ (Bad _)  -> return err
+
+helpEvalExp lambda @ (ELam _ _) = do
+  env <- ask
+  return $ Ok (lambda, env)
+
+helpEvalExp (EVar ident) = do
   bindMaybe <- getBinding ident
   case bindMaybe of
     Nothing -> do
       env <- ask
       return $ Bad $ UnboundVar ident env
-    Just value -> helpEvalExp value
+    Just (value, env) -> local (mergeEnv env) (helpEvalExp value)
   
 helpEvalExp (EOp op left right) = do
   leftEval <- helpEvalExp left
   rightEval <- helpEvalExp right
-  return $ (liftM2 pair leftEval rightEval) >>= (uncurry (evalOp op))
+  env <- ask
+  let evalValue = (liftM2 pair (fmap fst leftEval) (fmap fst rightEval)) >>= (uncurry $ evalOp op)
+
+  case evalValue of
+    Ok value      -> return $ Ok (value, env)
+    Bad err       -> return $ Bad err
   
 helpEvalExp (EApp funcExp valueExp) = do
   funcErr <- helpEvalExp funcExp
   case funcErr of
     error @ (Bad _)  -> return error 
-    Ok (ELam fun bind) -> case (bindValues bind valueExp) of
+    Ok ((ELam fun bind), env) -> case (bindValues bind valueExp) of
       Nothing        -> return $ Bad MatchError
       Just valPairs  ->
         let subExp = foldl (flip (uncurry substitute)) fun valPairs
-        in helpEvalExp subExp
-    Ok value           -> return $ Bad $ WrongType value valueExp
+        in local (mergeEnv env) (helpEvalExp subExp)
+    Ok (value, _)             -> return $ Bad $ WrongType value valueExp
 
 helpEvalExp (ETup tuple) = do
   first <- sequence $ map helpEvalExp tuple
-  return $ ETup `fmap` sequence first
+  return $ mapTup `fmap` sequence first
+  where
+    mapTup []                  = (ETup [], emptyEnv)
+    mapTup ((first, env):rest) = (ETup (first:newRest), env)
+      where newRest = map fst rest
 
-helpEvalExp value = return $ Ok value
+
+helpEvalExp value = return $ Ok (value, emptyEnv)
 
 pair :: a -> b -> (a, b)
 pair a b = (a, b)
