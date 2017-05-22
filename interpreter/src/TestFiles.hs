@@ -21,7 +21,9 @@ testFilesPairs = [
   "good/mut_rec.ad",
   "good/lazy_if.ad",
   "good/closures.ad",
-  "good/fast_fib.ad"
+  "good/fast_fib.ad",
+  "good/local_scope.ad",
+  "good/nested_let.ad"
   -- "good/tuple.ad"
   -- "good/call_by_need.ad"
   ]
@@ -51,7 +53,7 @@ helpTestFile fileCont =
            log $ indent prog
            return False
 
-testFile :: String -> IO ()
+testFile :: String -> IO Bool
 testFile file = do
   fileCont <- readFile file
   let (result, logs) = runWriter $ helpTestFile fileCont
@@ -63,7 +65,12 @@ testFile file = do
 
   mapM_ putStrLn logs
 
+  return result
+
 main :: IO ()
 main = do
-  mapM_ testFile testFilesPairs
+  results <- mapM testFile testFilesPairs
+  let number = length $ filter not results
 
+  putStrLn ""
+  putStrLn $ (show number) ++ " tests failed"

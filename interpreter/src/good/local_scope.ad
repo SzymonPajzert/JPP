@@ -1,0 +1,8 @@
+plus a b = a + b + 1; -- fake plus works differently
+
+inc x = let {
+	plus a b = a + b;
+	} plus 1 x;
+
+-- if plus is not in local scope the result is changed
+main = (inc 4) = (plus 3 1);
