@@ -109,7 +109,7 @@ closure_iter(Grammar, Acc, NewProds, Closure) :-
 
 
 closure_help(_, Prod, []) :-
-	Prod = lrprod(_, _, []), !.      % no more needed for closure if there's nothing to be read
+	Prod = lrprod(_, _, []), !.      % no closure if nothing is to be read 
 
 closure_help(Grammar, Prod, Needed) :-
 	Prod = lrprod(_, _, [First|_]),
@@ -145,12 +145,6 @@ next_state(State, Input, NextState) :-
 		NewHead = lrprod(NonTerm, NewRead, NewUnread),
 		NextState = [NewHead|NewTail])
 	; NextState = NewTail).
-
-/*
-next_state(State, Input, NextState) :-
-	State = [_|Tail],
-	next_state(Tail, Input, NextState).
-  */
 
 get_root(Grammar, Root) :- get_productions('Z', Grammar, Root).
 
@@ -211,7 +205,8 @@ get_all_neighbours_help(_, _, [], [], []) :- !.
 get_all_neighbours_help(Grammar, State, LettersToGo, NewEdges, NewStates) :-
 	LettersToGo = [Letter|Letters],
 
-	get_all_neighbours_help(Grammar, State, Letters, NewEdgesRest, NewStatesRest),
+	get_all_neighbours_help(
+		Grammar, State, Letters, NewEdgesRest, NewStatesRest),
 
 	next_state(State, Letter, NextState),
 	closure(Grammar, NextState, NextStateClosure),
@@ -304,13 +299,10 @@ print_automaton(Automaton) :-
 	nl, nl.
 
 /* Get next state of the automaton for given input I
-   aut contains of tuple (stack, input to be read, table) 
-run(EmptyAutomaton, EmptyAutomaton) :-        % Stop if all input's read
-	, !.        % TODO save: nice way of aliasing*/
-
+   aut contains of tuple (stack, input to be read, table) */
 run(Automaton, NextAutomaton) :-
 	(Automaton = aut(_, [], _)
-	-> NextAutomaton = Automaton
+	-> NextAutomaton = Automaton                 % stop if input is read
 	 ;
 	(Automaton = aut(Stack, _, Table),
 	Stack = [StackTop|_],
