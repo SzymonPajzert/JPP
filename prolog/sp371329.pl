@@ -1,3 +1,5 @@
+% Szymon Pajzert 371329
+
 :- use_module(library(lists)).
 
 /*
