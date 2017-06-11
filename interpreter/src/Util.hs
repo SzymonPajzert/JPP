@@ -70,3 +70,10 @@ print_indent (EBool bool) = do
 print_indent (ETup tuple) = do
   n <- ask
   return $ (make_indent n) ++ (unwords (map show tuple)) 
+
+print_indent (EMat exp binds) = return "match" {- do
+  n <- ask
+  let match = mak
+  matched <- local (+2) (print_indent exp)
+
+  return $ -}

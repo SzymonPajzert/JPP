@@ -1,0 +1,7 @@
+pair = (1, True);
+
+main = match pair with {
+	 | (a, b)    -> b
+	 | p         -> False
+	 | (_, _, _) -> False  -- should not even match 
+	 };

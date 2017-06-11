@@ -63,37 +63,58 @@ desugarVdef (Abs.VDef (Abs.Ident ident) binds exp) = lambda
       Ok $ ELam result bitterBind
     add_bind _    err@(Bad _) = err
 
-{-
 desugarVdef (Abs.VPat bind exp) = do
-  bitterBind <- desugar bind
-  case bitterBind of
--}
+  bitterBind <- desugarBind bind
+  bitterExp <- desugar exp
+  let triples = (\ident -> (ident, bitterBind, bitterExp)) `map` extractVars bind 
+  Ok $ map desugarVariableBind triples
+  
+desugarVariableBind :: (Var, Bind, Exp) -> Def    
+desugarVariableBind (var, bind, exp) = (var, EMat exp [(bind, EVar var)])
 
 desugarBind :: Abs.Bind -> ComErr Bind
 desugarBind bind = if uniqueIdents bind then case bind of
+  Abs.BSkip                  -> Ok BIgnore
   Abs.BVar (Abs.Ident ident) -> Ok $ BVar ident
   Abs.BTup [ident]           -> desugarBind ident
-  Abs.BTup idents  -> do
+  Abs.BTup idents            -> do
     newIdents <- sequence $ map desugarBind idents
     return $ BTup newIdents
+  Abs.BLis binds             -> do
+    newBinds <- sequence $ map desugarBind binds
+    return $ createBitterList newBinds
+  Abs.BULis leftB rightB     -> do
+    left  <- desugarBind leftB
+    right <- desugarBind rightB
+    return $ BPol listCons [left, right]
+  Abs.BCon (Abs.UIdent ident) binds -> do
+    newBinds <- sequence $ map desugarBind binds
+    return $ BPol ident newBinds
+    
   else Bad MultipleDefinitionsBinds
+
+createBitterList :: [Bind] -> Bind
+createBitterList binds = foldr addBind nil binds
+  where
+    nil               = BPol emptyList []
+    addBind bind tail = BPol listCons  [bind, tail]
+
 
 uniqueIdents :: Abs.Bind -> Bool
 uniqueIdents bind = unique $ extractVars bind
-  where
-    extractVars anyBind = case anyBind of
-      Abs.BLis binds         -> binds >>= extractVars
-      Abs.BTup binds         -> binds >>= extractVars
-      Abs.BCon _ binds       -> binds >>= extractVars
+    where unique list = (nub list) == list
 
-      Abs.BULis head tail    -> [head,tail] >>= extractVars
+extractVars :: Abs.Bind -> [Var]
+extractVars anyBind = case anyBind of
+  Abs.BLis binds         -> binds >>= extractVars
+  Abs.BTup binds         -> binds >>= extractVars
+  Abs.BCon _ binds       -> binds >>= extractVars
 
-      Abs.BVar (Abs.Ident ident) -> [ident]
-      Abs.BInt _             -> []
-      Abs.BSkip              -> []
+  Abs.BULis head tail    -> [head,tail] >>= extractVars
 
-    unique list = (nub list) == list
-
+  Abs.BVar (Abs.Ident ident) -> [ident]
+  Abs.BInt _             -> []
+  Abs.BSkip              -> []
 
 
 desugar :: (Abs.Exp) -> ComErr Exp
@@ -119,5 +140,28 @@ desugar (Abs.ECon (Abs.UIdent ident)) = Ok $ EVar ident
 desugar (Abs.EVar (Abs.Ident ident)) = Ok $ EVar ident
 desugar (Abs.ETup [exp]) = desugar exp
 desugar (Abs.ETup exps) = ETup `fmap` (sequence (map desugar exps))
+desugar (Abs.ELam idents exp) = desugarLambda exp idents
+desugar (Abs.EMat expS mcases) = do
+  exp <- desugar expS
+
+  let desugarCase (Abs.MCas bindS contS) = do
+        bind <- desugarBind bindS
+        cont <- desugar contS
+        return (bind, cont)
+  
+  newCases <- sequence $ map desugarCase mcases
+
+  return $ EMat exp newCases
+
+desugarLambda :: Abs.Exp -> [Abs.Bind] -> ComErr Exp
+desugarLambda expS identsS = do
+  exp <- desugar expS
+  idents <- sequence $ map desugarBind identsS
+
+  let lambda = foldr (\ident expAcc -> ELam expAcc ident) exp idents
+
+  return lambda
+  
+  
 
 -- desugar unsupported = Bad $ UnsupportedSyntaxExpr unsupported

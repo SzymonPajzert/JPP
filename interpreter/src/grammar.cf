@@ -26,7 +26,7 @@ token LIdent '`'(lower)		  		  		 ; -- lower letters - type parameters
 --- mulitple definitions of function represent different cases - cases are tried top down
 
 VDef. VDef ::= Ident [Bind1] "=" Exp ;
---- TODO support VPar. VDef ::= Bind1         "=" Exp ;
+VPat. VDef ::= Bind1         "=" Exp ;
 separator nonempty Ident "" ;
 
 separator nonempty MCase "" ;
@@ -50,7 +50,7 @@ _. Bind ::= Bind1 ;
 terminator VDef ";" ;
 ELet. Exp ::= "let" "{" [VDef] "}" Exp ;
 EIf.  Exp ::= "if" Exp "then" Exp "else" Exp ;
-ELam. Exp ::= "fun" [Ident] "->" Exp ;
+ELam. Exp ::= "fun" [Bind1] "->" Exp ;
 
 ESmal.                  Exp3 ::= Exp4 "<" Exp4 ;
 ESmal ([],[1])([],[0]). Exp3 ::= Exp4 ">" Exp4 ;

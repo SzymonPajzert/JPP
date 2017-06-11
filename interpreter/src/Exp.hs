@@ -32,6 +32,7 @@ data Exp
   | EInt Integer
   | EBool Bool
   | ETup [Exp]
+  | EMat Exp [(Bind, Exp)]
   deriving (Show)
 
 is_basic :: Exp -> Bool
@@ -46,3 +47,12 @@ instance Eq Exp where
   (==) (EBool a) (EBool b) = (a == b)
   (==) (ETup  a) (ETup  b) = (a == b)
   (==) _         _         = False
+
+
+--                 consts               -- 
+
+emptyList :: String
+emptyList = "_Nil"
+
+listCons :: String
+listCons  = "_Cons"

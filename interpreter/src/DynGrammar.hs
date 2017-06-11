@@ -28,7 +28,7 @@ data RuntimeError
   = AppTypeMismatch FuncId [Exp]
   | UnboundVar Var Environment
   | WrongType Exp Exp
-  | MatchError
+  | MatchError Exp [Bind]
   deriving (Show)
 
 data FuncId
@@ -50,6 +50,15 @@ interpret exp = runReader (helpEvalExp exp) env >>= (return . fst)
 
 addBinding :: Var -> ExpEnv -> Environment -> Environment
 addBinding var exp env = env {bindings = Bindings (Map.insert var exp (getMap $ bindings env)) }
+
+addBindings :: [(Var, Exp)] -> Environment -> Reader Environment Environment
+addBindings anyDefs env = do
+  boundAnyDefs <- mapM bindEnv anyDefs
+  return $ foldl (flip (uncurry addBinding)) env boundAnyDefs
+  where
+    bindEnv (var, exp) = do
+      env <- ask
+      return $ (var, (exp, env))
 
 getBinding :: Var -> Reader Environment (Maybe ExpEnv)
 getBinding ident = do
@@ -74,11 +83,11 @@ bindValues (BTup binds) (ETup exps) = do
   return $ concat toConcat
 bindValues (BTup _)     _   = Nothing
 
-tryBinds :: [Bind] -> Exp -> Maybe [(Var, Exp)]
+tryBinds :: [(Bind, Exp)] -> Exp -> Maybe ([(Var, Exp)], Exp)
 tryBinds []     _   = Nothing
-tryBinds (b:bs) exp = case bindValues b exp of
+tryBinds ((b,cont):bs) exp = case bindValues b exp of
   Nothing -> tryBinds bs exp
-  result  -> result
+  Just result  -> Just (result, cont)
 
 
 substitute :: Var -> Exp -> Exp -> Exp
@@ -105,10 +114,8 @@ helpEvalExp (EIf condExp trueExp falseExp) = do
 
 helpEvalExp (ELet defs exp) = do
   env <- ask
-
-  let bindEnv (var, exp) = (var, (exp, env))
-  let addBindings anyDefs env = foldl (flip (uncurry addBinding)) env (map bindEnv anyDefs)
-  let newEnv = addBindings defs env
+  
+  newEnv <- addBindings defs env
 
   evalPair <- local (mergeEnv newEnv) (helpEvalExp exp)
   case evalPair of
@@ -142,7 +149,7 @@ helpEvalExp (EApp funcExp valueExp) = do
   case funcErr of
     error @ (Bad _)  -> return error 
     Ok ((ELam fun bind), env) -> case (bindValues bind valueExp) of
-      Nothing        -> return $ Bad MatchError
+      Nothing        -> return $ Bad $ MatchError valueExp [bind]
       Just valPairs  ->
         let subExp = foldl (flip (uncurry substitute)) fun valPairs
         in local (mergeEnv env) (helpEvalExp subExp)
@@ -156,8 +163,21 @@ helpEvalExp (ETup tuple) = do
     mapTup ((first, env):rest) = (ETup (first:newRest), env)
       where newRest = map fst rest
 
-
-helpEvalExp value = return $ Ok (value, emptyEnv)
+helpEvalExp (EMat mExp binds) = do
+  mExpMaybe <- helpEvalExp mExp
+  case mExpMaybe of
+    Bad error -> return $ Bad error
+    Ok (mExpEval, expEnv) ->
+      case tryBinds binds mExpEval of
+        Nothing            -> return $ Bad $ MatchError mExpEval (map fst binds)
+        Just (binds, cont) -> do
+          env <- ask
+          newEnv <- addBindings binds (mergeEnv expEnv env)
+          local (mergeEnv newEnv) (helpEvalExp cont)
+    
+      
+helpEvalExp value @ (EInt  _) = return $ Ok (value, emptyEnv)
+helpEvalExp value @ (EBool _) = return $ Ok (value, emptyEnv)
 
 pair :: a -> b -> (a, b)
 pair a b = (a, b)

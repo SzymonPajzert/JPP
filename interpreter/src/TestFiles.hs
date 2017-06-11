@@ -23,8 +23,10 @@ testFilesPairs = [
   "good/closures.ad",
   "good/fast_fib.ad",
   "good/local_scope.ad",
-  "good/nested_let.ad"
-  -- "good/tuple.ad"
+  "good/nested_let.ad",
+  "good/basic_match.ad",
+  "good/tuple.ad",
+  "good/list_match.ad"
   -- "good/call_by_need.ad"
   ]
 
