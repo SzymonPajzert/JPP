@@ -43,7 +43,7 @@ BInt.  Bind1 ::= Integer ;			-- Bind argument to integer value
 BSkip. Bind1 ::= "_" ;  		    -- Skip argument
 
 separator Bind1 "" ;
-BULis. Bind ::= Bind1 "::" Bind1 ;  -- Extract head from tail of the list
+BULis. Bind ::= Bind1 "::" Bind ;  -- Extract head from tail of the list
 BCon.  Bind ::= UIdent [Bind1] ;	-- Different from application since during unapplying we want to have full information about parameters
 _. Bind ::= Bind1 ;
 

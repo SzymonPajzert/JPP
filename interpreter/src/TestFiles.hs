@@ -26,7 +26,13 @@ testFilesPairs = [
   "good/nested_let.ad",
   "good/basic_match.ad",
   "good/tuple.ad",
-  "good/list_match.ad"
+  "good/list_match.ad",
+  "good/basic_lists.ad",
+  "good/infinite_list.ad",
+  "good/list_exists.ad",
+  "good/list_sum.ad",
+  "good/higher_order_lists.ad"
+  -- , "good/match_gen.ad"
   -- "good/call_by_need.ad"
   ]
 

@@ -17,6 +17,7 @@ data Op
 
 data Bind
   = BIgnore
+  | BInt Integer
   | BVar Var             -- variable binding (TODO remove and merger with tuple)
   | BTup [Bind]          -- tuple binding
   | BPol String [Bind]   -- polymorphic type binding
@@ -33,14 +34,16 @@ data Exp
   | EBool Bool
   | ETup [Exp]
   | EMat Exp [(Bind, Exp)]
+  | ECon Var [Exp]
   deriving (Show)
 
 is_basic :: Exp -> Bool
 is_basic exp = case exp of
-  EInt  _ -> True
-  EBool _ -> True
-  ETup  _ -> True
-  _       -> False
+  EInt  _  -> True
+  EBool _  -> True
+  ETup  _  -> True
+  ECon _ _ -> True
+  _        -> False
 
 instance Eq Exp where
   (==) (EInt  a) (EInt  b) = (a == b)

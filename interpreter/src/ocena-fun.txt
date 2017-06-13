@@ -28,8 +28,36 @@
 * Na 20 punktów
 + 1 (listy dowolnego typu, zagnieżdżone i listy funkcji)
   2 (proste typy algebraiczne z jednopoziomowym pattern matchingiem)
-+ 3 (statyczne wiązanie identyfikatorów)
-+ 4 (statyczne typowanie)
+  3 (statyczne wiązanie identyfikatorów)
+  4 (statyczne typowanie)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 * Na 24 punkty
 + 1 (ogólne polimorficzne i rekurencyjne typy algebraiczne)
 + 2 (typy polimorficzne z algorytmem rekonstrukcji typów)

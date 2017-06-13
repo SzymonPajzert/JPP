@@ -6,14 +6,17 @@ module DynGrammar (interpret, Exp(..)) where
 import Prelude hiding (exp, error, unlines)
 import qualified Data.Map.Strict as Map
 import Control.Monad.Reader
+import Debug.Trace
 
-import Exp
-import Err
-import Util (unlines)
+import Exp 
+import Err 
+import Util (unlines, indent)
 
 type ExpEnv = (Exp, Environment)
 
 newtype Bindings = Bindings { getMap :: (Map.Map Var ExpEnv) }
+
+type EvalResult = Reader Environment (RunErr ExpEnv)
 
 instance Show Bindings where
   show (Bindings bindMap) = unlines $ map represent (Map.toList bindMap)
@@ -36,11 +39,13 @@ data FuncId
   | FuncOp  Op
   deriving (Show)
 
+type MaybeBind =  RunErr (Maybe ([(Var, Exp)], Environment))
+
 emptyEnv :: Environment
 emptyEnv = Environment $ Bindings Map.empty
 
 interpret :: Exp -> RunErr Exp
-interpret exp = runReader (helpEvalExp exp) env >>= (return . fst)
+interpret exp = runReader (evalExp exp) env >>= (return . fst)
   where
     baseMap = Map.fromList [("True", (EBool True, emptyEnv)),
                             ("False", (EBool False, emptyEnv))
@@ -56,9 +61,7 @@ addBindings anyDefs env = do
   boundAnyDefs <- mapM bindEnv anyDefs
   return $ foldl (flip (uncurry addBinding)) env boundAnyDefs
   where
-    bindEnv (var, exp) = do
-      env <- ask
-      return $ (var, (exp, env))
+    bindEnv (var, exp) = return $ (var, (exp, env))
 
 getBinding :: Var -> Reader Environment (Maybe ExpEnv)
 getBinding ident = do
@@ -74,21 +77,55 @@ safeZip (a:as) (b:bs) = fmap ((:) (a, b)) $ safeZip as bs
 safeZip []     []     = Just []
 safeZip _      _      = Nothing
 
-bindValues :: Bind -> Exp -> Maybe [(Var, Exp)]
-bindValues BIgnore      _   = Just []
-bindValues (BVar var)   exp = Just [(var, exp)]
-bindValues (BTup binds) (ETup exps) = do
-  pairs <- safeZip binds exps
-  toConcat <- sequence $ map (uncurry bindValues) pairs
-  return $ concat toConcat
-bindValues (BTup _)     _   = Nothing
+bindValues :: Bind -> Exp -> Reader Environment MaybeBind
+bindValues BIgnore      _   = return $ Ok $ Just ([], emptyEnv)
+bindValues (BVar var)   exp = return $ Ok $ Just ([(var, exp)], emptyEnv)
+bindValues bind lazyExp = do
+  expError <- evalExp lazyExp
+  case expError of
+    Bad error -> return $ Bad error
+    -- possibly have to save the environment
+    Ok (exp, env) -> case (bind, exp) of
+      ((BTup binds), (ETup exps)) -> bindLists binds exps env
+      ((BTup _)    , _          ) -> return $ Ok $ Nothing
+      ((BInt int)  ,(EInt value)) -> return $ Ok $
+        if int == value then Just ([], emptyEnv) else Nothing
+      ((BInt _)    , _          ) -> return $ Ok $ Nothing
+      ((BPol nameP binds), (ECon nameC exps)) ->
+        if nameP == nameC
+        then bindLists binds exps env
+        else return $ Ok $ Nothing
+      ((BPol _ _) , _          ) -> return $ Ok $ Nothing
 
-tryBinds :: [(Bind, Exp)] -> Exp -> Maybe ([(Var, Exp)], Exp)
-tryBinds []     _   = Nothing
-tryBinds ((b,cont):bs) exp = case bindValues b exp of
-  Nothing -> tryBinds bs exp
-  Just result  -> Just (result, cont)
+bindLists :: [Bind] -> [Exp] -> Environment -> Reader Environment MaybeBind
+bindLists binds exps env =
+  case safeZip binds exps of
+    Nothing -> return $ Ok $ Nothing
+    Just pairs -> do
+      extract <- mapM (uncurry bindValues) pairs
+      case sequence extract of
+        Bad error -> return $ Bad error
+        Ok seq -> case sequence seq of
+          Nothing -> return $ Ok Nothing
+          Just result -> do
+            let (values, envs) = unzip result
+            let finalEnv = foldl mergeEnv env envs
+            return $ Ok $ Just (concat values, finalEnv) 
+          
+                     
+tryBinds :: [(Bind, Exp)] -> Exp -> Reader Environment (RunErr (Maybe (([(Var, Exp)], Environment), Exp)))
+tryBinds []     _   = return $ Ok $ Nothing
+tryBinds ((b,cont):bs) exp = do
+  bound <- bindValues b exp
+  case bound of
+    Bad error -> return $ Bad error
+    Ok Nothing -> tryBinds bs exp
+    Ok (Just result)  -> return $ Ok $ Just (result, cont)
 
+unpack :: (RunErr (Maybe (a, b))) -> (RunErr (Maybe a), RunErr (Maybe b))
+unpack (Bad error) = (Bad error, Bad error)
+unpack (Ok Nothing) = (Ok Nothing, Ok Nothing)
+unpack (Ok (Just (a, b))) = (Ok $ Just a, Ok $ Just b) 
 
 substitute :: Var -> Exp -> Exp -> Exp
 substitute varS valS exp = case exp of
@@ -99,44 +136,59 @@ substitute varS valS exp = case exp of
   (EOp op exp1 exp2) -> EOp op (sub exp1) (sub exp2)
   (EVar var) | var == varS -> valS
   (ETup tuple) -> ETup (map sub tuple)
+  (EMat expr binds) -> EMat (sub expr) (map (\(bind, exp) -> (bind, sub exp)) binds)
+  (ECon name elems) -> ECon name (map sub elems)
   var @ (EVar _) -> var
   val @ (EInt _) -> val
   val @ (EBool _) -> val
   where sub = substitute varS valS
 
-helpEvalExp :: Exp -> Reader Environment (RunErr ExpEnv)
-helpEvalExp (EIf condExp trueExp falseExp) = do
-  cond <- helpEvalExp condExp
+substituteMany :: [(Var, Exp)] -> Exp -> Exp
+substituteMany binds expr = foldl (flip (uncurry substitute)) expr binds
+
+substituteBind :: Environment -> Exp -> MaybeBind -> RuntimeError -> EvalResult
+substituteBind env expr bound matchError =
+  case bound of
+    Bad error      -> return $ Bad error
+    Ok Nothing     -> return $ Bad $ matchError
+    Ok (Just (valPairs, environment))  -> do
+      let subExp = substituteMany valPairs expr
+      local (mergeEnv environment . mergeEnv env) (evalExp subExp)
+
+evalExp :: Exp -> EvalResult
+-- evalExp value | trace ((indent value) ++ "----------------\n\n\n") False = undefined
+evalExp (EIf condExp trueExp falseExp) = do
+  cond <- evalExp condExp
   case cond of
     Bad err -> return $ Bad err
-    Ok ((EBool bool), _) -> helpEvalExp $ if bool then trueExp else falseExp
+    Ok ((EBool bool), _) -> evalExp $ if bool then trueExp else falseExp
     Ok (value, _) -> return $ Bad $ AppTypeMismatch (FuncVar "if") ([value])
 
-helpEvalExp (ELet defs exp) = do
+evalExp (ELet defs exp) = do
   env <- ask
   
   newEnv <- addBindings defs env
 
-  evalPair <- local (mergeEnv newEnv) (helpEvalExp exp)
+  evalPair <- local (mergeEnv newEnv) (evalExp exp)
   case evalPair of
     Ok (evalExp, _) -> return $ Ok (evalExp, newEnv)
     err @ (Bad _)  -> return err
 
-helpEvalExp lambda @ (ELam _ _) = do
+evalExp lambda @ (ELam _ _) = do
   env <- ask
   return $ Ok (lambda, env)
 
-helpEvalExp (EVar ident) = do
+evalExp (EVar ident) = do
   bindMaybe <- getBinding ident
   case bindMaybe of
     Nothing -> do
       env <- ask
       return $ Bad $ UnboundVar ident env
-    Just (value, env) -> local (mergeEnv env) (helpEvalExp value)
+    Just (value, env) -> local (mergeEnv env) (evalExp value)
   
-helpEvalExp (EOp op left right) = do
-  leftEval <- helpEvalExp left
-  rightEval <- helpEvalExp right
+evalExp (EOp op left right) = do
+  leftEval <- evalExp left
+  rightEval <- evalExp right
   env <- ask
   let evalValue = (liftM2 pair (fmap fst leftEval) (fmap fst rightEval)) >>= (uncurry $ evalOp op)
 
@@ -144,40 +196,38 @@ helpEvalExp (EOp op left right) = do
     Ok value      -> return $ Ok (value, env)
     Bad err       -> return $ Bad err
   
-helpEvalExp (EApp funcExp valueExp) = do
-  funcErr <- helpEvalExp funcExp
+evalExp (EApp funcExp valueExp) = do
+  funcErr <- evalExp funcExp
   case funcErr of
-    error @ (Bad _)  -> return error 
-    Ok ((ELam fun bind), env) -> case (bindValues bind valueExp) of
-      Nothing        -> return $ Bad $ MatchError valueExp [bind]
-      Just valPairs  ->
-        let subExp = foldl (flip (uncurry substitute)) fun valPairs
-        in local (mergeEnv env) (helpEvalExp subExp)
+    error @ (Bad _)  -> return error
+    Ok ((ELam fun bind), env) -> do
+      bound <- bindValues bind valueExp
+      substituteBind env fun bound (MatchError valueExp [bind])
     Ok (value, _)             -> return $ Bad $ WrongType value valueExp
 
-helpEvalExp (ETup tuple) = do
-  first <- sequence $ map helpEvalExp tuple
-  return $ mapTup `fmap` sequence first
-  where
-    mapTup []                  = (ETup [], emptyEnv)
-    mapTup ((first, env):rest) = (ETup (first:newRest), env)
-      where newRest = map fst rest
-
-helpEvalExp (EMat mExp binds) = do
-  mExpMaybe <- helpEvalExp mExp
+evalExp (EMat mExp binds) = do
+  mExpMaybe <- evalExp mExp
   case mExpMaybe of
     Bad error -> return $ Bad error
-    Ok (mExpEval, expEnv) ->
-      case tryBinds binds mExpEval of
-        Nothing            -> return $ Bad $ MatchError mExpEval (map fst binds)
-        Just (binds, cont) -> do
-          env <- ask
-          newEnv <- addBindings binds (mergeEnv expEnv env)
-          local (mergeEnv newEnv) (helpEvalExp cont)
-    
-      
-helpEvalExp value @ (EInt  _) = return $ Ok (value, emptyEnv)
-helpEvalExp value @ (EBool _) = return $ Ok (value, emptyEnv)
+    Ok (mExpEval, expEnv) -> do
+      boundPair <- tryBinds binds mExpEval
+      let (bound, contMaybe) = unpack boundPair
+      let matchError = (MatchError mExpEval (map fst binds))
+
+      case contMaybe of
+        Bad error -> return $ Bad error
+        Ok Nothing -> return $ Bad matchError
+        Ok (Just cont) -> substituteBind expEnv cont bound matchError
+        
+evalExp (ETup tuple) = helpEvalList tuple ETup
+evalExp (ECon name params) = helpEvalList params (ECon name)
+evalExp value @ (EInt  _) = return $ Ok (value, emptyEnv)
+evalExp value @ (EBool _) = return $ Ok (value, emptyEnv)
+
+helpEvalList :: [Exp] -> ([Exp] -> Exp) -> EvalResult 
+helpEvalList list packing = do
+  env <- ask
+  return $ Ok $ (packing list, env)
 
 pair :: a -> b -> (a, b)
 pair a b = (a, b)

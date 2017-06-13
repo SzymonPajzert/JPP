@@ -1,0 +1,12 @@
+map f list = match list with {
+  | []        -> []
+  | h :: tail -> (f h) :: (map f tail)
+  };
+
+inc x = x + 1;
+
+test_match = match (map inc [0]) with {
+  | x :: [] -> x = 1
+  };
+
+main = test_match;

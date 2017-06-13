@@ -1,0 +1,10 @@
+repeat x = x :: (repeat x);
+
+infinite = repeat 5;
+
+test = match infinite with {
+  | 5 :: _ -> True
+  | _ -> False
+  };
+
+main = test;

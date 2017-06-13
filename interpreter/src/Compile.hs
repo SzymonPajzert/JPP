@@ -2,7 +2,7 @@
 
 module Compile where
 
-import Prelude hiding (exp)
+import Prelude hiding (exp, head, tail)
 import Data.List (partition, nub)
 import Control.Monad (liftM2, liftM3)
 
@@ -90,6 +90,7 @@ desugarBind bind = if uniqueIdents bind then case bind of
   Abs.BCon (Abs.UIdent ident) binds -> do
     newBinds <- sequence $ map desugarBind binds
     return $ BPol ident newBinds
+  Abs.BInt int -> return $ BInt int 
     
   else Bad MultipleDefinitionsBinds
 
@@ -134,7 +135,12 @@ desugar (Abs.ESub left right) = (liftM2 $ EOp OpSub) (desugar left) (desugar rig
 desugar (Abs.EMul left right) = (liftM2 $ EOp OpMul) (desugar left) (desugar right)
 -- desugar (Abs.Cons _ _)
 desugar (Abs.EApp func value) = (liftM2 EApp) (desugar func) (desugar value)
--- desugar (ELis _)
+desugar (Abs.ELis listExp) = do
+  bitterList <- mapM desugar listExp
+  return $ foldr addElementToList (ECon emptyList []) bitterList
+  where
+    addElementToList element list = ECon listCons [element, list]
+  
 desugar (Abs.EInt int) = Ok $ EInt int
 desugar (Abs.ECon (Abs.UIdent ident)) = Ok $ EVar ident
 desugar (Abs.EVar (Abs.Ident ident)) = Ok $ EVar ident
@@ -152,6 +158,11 @@ desugar (Abs.EMat expS mcases) = do
   newCases <- sequence $ map desugarCase mcases
 
   return $ EMat exp newCases
+desugar (Abs.ECons headS tailS) = do
+  head <- desugar headS
+  tail <- desugar tailS
+
+  return $ ECon listCons [head, tail]
 
 desugarLambda :: Abs.Exp -> [Abs.Bind] -> ComErr Exp
 desugarLambda expS identsS = do

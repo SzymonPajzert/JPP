@@ -1,0 +1,21 @@
+map f list = match list with {
+  | []        -> []
+  | h :: tail -> (f h) :: (map f tail)
+  };
+
+sum list = match list with {
+  | [] -> 0
+  | h :: tail -> h + (sum tail)
+  };
+
+exists elem list = match list with {
+  | [] -> False
+  | h :: tail -> if h = elem then True else exists elem tail
+  };
+
+foldl f first list = match list with {
+  | [] -> first
+  | h :: tail -> foldl f (f first h) tail
+  };
+
+main = sum [1,2,3,4] = sum [4,3,2,1] && sum [1,2,3,4] = 10; 

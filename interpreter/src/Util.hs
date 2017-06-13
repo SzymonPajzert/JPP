@@ -7,8 +7,10 @@ import Exp
 indent :: Exp -> String
 indent exp = runReader (print_indent exp) 0
 
-make_indent :: Int -> String
-make_indent n = take n $ repeat ' '
+make_indent :: String -> Reader Int String
+make_indent word = do
+  n <- ask
+  return $ (take n $ repeat ' ') ++ word 
 
 unlines :: [String] -> String
 unlines [] = []
@@ -28,52 +30,57 @@ print_indent (EIf cond true false) = do
   return $ unlines [condS, trueS, falseS]
 
 print_indent (ELet defs finalExp) = do
-  n <- ask
-  let letS = (make_indent n)++"let"
+  letS <- make_indent "let"
   defsS <- mapM print_def defs
-  let inS = (make_indent n)++"in"
+  inS <- make_indent "in"
   expS <- local (+2) $ print_indent finalExp
   return $ unlines $ [letS] ++ defsS ++ [inS, expS]
     where
       print_def :: Def -> Reader Int String
       print_def (def, value) = do
-        n <- ask
-        let defS = (make_indent (n+2)) ++ def ++ " ="
+        defS <- local (+2) (make_indent (def ++ " ="))
         expS <- local (+4) (print_indent value)
         return $ unlines [defS, expS]
 
 print_indent (ELam exp var) = do
-  n <- ask
-  let varS = (make_indent n) ++ (show var)
+  varS <- make_indent (show var)
   expS <- local (+2) (print_indent exp)
   return $ unlines $ [varS, expS]
 
 print_indent (EVar var) = do
-  n <- ask
-  return $ unlines [(make_indent n) ++ var]
+  varS <- make_indent var
+  return $ unlines [varS]
 
 print_indent (EOp op exp1 exp2) = do
-  n <- ask
-  let opS = (make_indent n) ++ show op
+  opS <- make_indent (show op)
   exp1S <- local (+2) (print_indent exp1)
   exp2S <- local (+2) (print_indent exp2)
   return $ unlines [opS, exp1S, exp2S]
 
 print_indent (EInt value) = do
-  n <- ask
-  return $ (make_indent n) ++ show value
+  make_indent $ show value
 
 print_indent (EBool bool) = do
-  n <- ask
-  return $ (make_indent n) ++ show bool
+  make_indent $ show bool
 
 print_indent (ETup tuple) = do
-  n <- ask
-  return $ (make_indent n) ++ (unwords (map show tuple)) 
+  make_indent (unwords (map show tuple)) 
 
-print_indent (EMat exp binds) = return "match" {- do
-  n <- ask
-  let match = mak
-  matched <- local (+2) (print_indent exp)
+print_indent (EMat exp binds) = do
+  matchS <- make_indent "match"
+  expS <- local (+2) (print_indent exp)
+  withS <-  make_indent "with"
+  bindsS <- mapM (\bind -> local (+2) (print_indent_bind bind)) binds
 
-  return $ -}
+  return $ unlines $ [matchS, expS, withS] ++ bindsS 
+
+print_indent (ECon name params) = do
+  nameS <- make_indent name
+  paramsS <- sequence $ map print_indent params
+
+  return $ unlines (nameS : paramsS)
+
+print_indent_bind (bind, exp) = do
+  bindS <- make_indent $ (show bind) ++ " ->"
+  expS <- local (+2) (print_indent exp)
+  return $ unlines [bindS, expS]
