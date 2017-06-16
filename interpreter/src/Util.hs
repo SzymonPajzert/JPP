@@ -8,7 +8,7 @@ import Exp
 type IndentString = Reader Int String
 
 -- TODO probably remove
--- | Return two lists only if they are matching length 
+-- | Return two lists only if they are matching length
 safeZip :: [a] -> [b] -> Maybe [(a, b)]
 safeZip (a:as) (b:bs) = fmap ((:) (a, b)) $ safeZip as bs
 safeZip []     []     = Just []
@@ -22,7 +22,7 @@ indent exp = runReader (print_indent exp) 0
 make_indent :: String -> IndentString
 make_indent word = do
   n <- ask
-  return $ (take n $ repeat ' ') ++ word 
+  return $ (take n $ repeat ' ') ++ word
 
 -- | Out version of unlines which doesn't append newline to last line
 unlines :: [String] -> String
@@ -69,7 +69,7 @@ print_indent (EInt value) = do
   make_indent $ show value
 
 print_indent (ETup tuple) = do
-  make_indent (unwords (map show tuple)) 
+  make_indent (unwords (map show tuple))
 
 print_indent (EMat exp binds) = do
   matchS <- make_indent "match"
@@ -83,11 +83,9 @@ print_indent (EMat exp binds) = do
       bindS <- make_indent $ (show bind) ++ " ->"
       expS <- local (+2) (print_indent expBind)
       return $ unlines [bindS, expS]
-  
+
 print_indent (ECon name params) = do
   nameS <- make_indent name
   paramsS <- sequence $ map print_indent params
 
   return $ unlines (nameS : paramsS)
-
-

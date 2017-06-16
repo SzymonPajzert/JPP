@@ -17,7 +17,8 @@ TypDef. TopDef ::= TDef ; -- type specifications (clarifications or new type cre
 -- Token definitions
 
 token UIdent (upper (letter | digit | '_')*) ; -- Word starting with capital letter - type constuctor and types
-token LIdent '`'(lower)		  		  		 ; -- lower letters - type parameters
+token LIdent (lower (letter | digit | '_')*) ;
+token PIdent '`'(lower)						 ; -- lower letters - type parameters
 
 -- ******************** VALUES ***********************
 
@@ -25,9 +26,10 @@ token LIdent '`'(lower)		  		  		 ; -- lower letters - type parameters
 --- pattern matching is available in function definition
 --- mulitple definitions of function represent different cases - cases are tried top down
 
-VDef. VDef ::= Ident [Bind1] "=" Exp ;
-VPat. VDef ::= Bind1         "=" Exp ;
-separator nonempty Ident "" ;
+VDef. VDef ::= LIdent [Bind1] "=" Exp ;
+-- TODO remove let
+VPat. VDef ::= "let"  Bind1   "=" Exp ;
+separator nonempty LIdent "" ;
 
 separator nonempty MCase "" ;
 EMat. Exp ::= "match" Exp "with" "{" [MCase] "}" ;
@@ -35,17 +37,18 @@ EMat. Exp ::= "match" Exp "with" "{" [MCase] "}" ;
 MCas. MCase ::= "|" Bind "->" Exp ;
 
 --- Lists and tuples in functional programming
-separator Bind "," ;				-- Separator in lists and tuples 
-BLis.  Bind1 ::= "[" [Bind] "]" ;   -- Bind list elements and its length
-BTup.  Bind1 ::= "(" [Bind] ")" ;	-- Bind tuple arguments
-BVar.  Bind1 ::= Ident ;
-BInt.  Bind1 ::= Integer ;			-- Bind argument to integer value
-BSkip. Bind1 ::= "_" ;  		    -- Skip argument
+separator Bind "," ;				-- Separator in lists and tuples
+BLis.  Bind2 ::= "[" [Bind] "]" ;   -- Bind list elements and its length
+BTup.  Bind2 ::= "(" [Bind] ")" ;	-- Bind tuple arguments
+BVar.  Bind2 ::= LIdent ;
+BInt.  Bind2 ::= Integer ;			-- Bind argument to integer value
+BSkip. Bind2 ::= "_" ;				-- Skip argument
 
 separator Bind1 "" ;
-BULis. Bind ::= Bind1 "::" Bind ;  -- Extract head from tail of the list
+BULis. Bind1 ::= Bind2 "::" Bind1 ;  -- Extract head from tail of the list
 BCon.  Bind ::= UIdent [Bind1] ;	-- Different from application since during unapplying we want to have full information about parameters
 _. Bind ::= Bind1 ;
+_. Bind1 ::= Bind2 ;
 
 terminator VDef ";" ;
 ELet. Exp ::= "let" "{" [VDef] "}" Exp ;
@@ -63,18 +66,18 @@ EAdd. Exp1 ::= Exp1 "+" Exp2 ;
 ESub. Exp1 ::= Exp1 "-" Exp2 ;
 EMul. Exp2 ::= Exp2 "*" Exp3 ;
 
-ECons.Exp3 ::= Exp4 "::" Exp3 ;  	 -- List append joins to right
+ECons.Exp3 ::= Exp4 "::" Exp3 ;		 -- List append joins to right
 
-EApp. Exp4 ::= Exp4 Exp5 ; 	  		 -- Function application joins to left
+EApp. Exp4 ::= Exp4 Exp5 ;				 -- Function application joins to left
 
 separator Exp "," ;
 ELis. Exp5 ::= "[" [Exp] "]" ;
 ETup. Exp5 ::= "(" [Exp] ")" ;
 EInt. Exp5 ::= Integer ;			 -- Integer literal
-ECon. Exp5 ::= UIdent ;    			 -- Type constructor
-EVar. Exp5 ::= Ident ;     			 -- Identificator call
+ECon. Exp5 ::= UIdent ;					 -- Type constructor
+EVar. Exp5 ::= LIdent ;					 -- Identificator call
 
--- Boolean types are part of language, not hardcoded in its grammar 
+-- Boolean types are part of language, not hardcoded in its grammar
 -- Data constructors are functions, ex:
 -- Node : `a -> Node -> Node -> Node
 -- Empty : Node
@@ -89,18 +92,18 @@ _. Exp4 ::= Exp5 ;
 
 
 -- ************************ TYPES ***********************
-separator LIdent "" ;
+separator PIdent "" ;
 separator SubType "" ;
 separator Type "," ;
 separator Type3 "" ;
 
-TDef.  TDef ::= UIdent [LIdent] "=" Type ;
-TClar. TDef ::= Ident ":" Type ;
+TDef.  TDef ::= UIdent [PIdent] "=" Type ;
+TClar. TDef ::= LIdent ":" Type ;
 
 -- Type is creation of new type - broadening the domain of existing types
 TApp. Type2 ::= Type2 Type3;
-TBnd. Type3 ::= UIdent;	      -- Call of existing type (at the beginning Int and Bool)
-TUnd. Type3 ::= LIdent ;
+TBnd. Type3 ::= UIdent;		  -- Call of existing type (at the beginning Int and Bool)
+TUnd. Type3 ::= PIdent ;
 TTup. Type3 ::= "(" [Type] ")" ;
 TLis. Type3 ::= "[" Type2 "]" ;
 

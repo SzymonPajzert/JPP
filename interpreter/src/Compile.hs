@@ -63,7 +63,7 @@ desugarVdefs vdefs = do
   return $ concat toFlat
 
 desugarVdef :: Abs.VDef -> ComErr [Def]
-desugarVdef (Abs.VDef (Abs.Ident ident) binds exp) = lambda
+desugarVdef (Abs.VDef (Abs.LIdent ident) binds exp) = lambda
   where
     lambda = do
       bound <- foldr add_bind (desugar exp) binds
@@ -86,7 +86,7 @@ desugarVariableBind (var, bind, exp) = (var, EMat exp [(bind, EVar var)])
 desugarBind :: Abs.Bind -> ComErr Bind
 desugarBind bind = if uniqueIdents bind then case bind of
   Abs.BSkip                  -> Ok BIgnore
-  Abs.BVar (Abs.Ident ident) -> Ok $ BVar ident
+  Abs.BVar (Abs.LIdent ident) -> Ok $ BVar ident
   Abs.BTup [ident]           -> desugarBind ident
   Abs.BTup idents            -> do
     newIdents <- sequence $ map desugarBind idents
@@ -124,7 +124,7 @@ extractVars anyBind = case anyBind of
 
   Abs.BULis head tail    -> [head,tail] >>= extractVars
 
-  Abs.BVar (Abs.Ident ident) -> [ident]
+  Abs.BVar (Abs.LIdent ident) -> [ident]
   Abs.BInt _             -> []
   Abs.BSkip              -> []
 
@@ -168,7 +168,7 @@ desugar (Abs.ELis listExp) = do
 
 desugar (Abs.EInt int) = Ok $ EInt int
 desugar (Abs.ECon (Abs.UIdent ident)) = Ok $ EVar ident
-desugar (Abs.EVar (Abs.Ident ident)) = Ok $ EVar ident
+desugar (Abs.EVar (Abs.LIdent ident)) = Ok $ EVar ident
 desugar (Abs.ETup [exp]) = desugar exp
 desugar (Abs.ETup exps) = ETup `fmap` (sequence (map desugar exps))
 desugar (Abs.ELam idents exp) = desugarLambda exp idents
