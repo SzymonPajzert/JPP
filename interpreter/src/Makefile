@@ -8,11 +8,9 @@ interpret_test: DynGrammar.hs Compile.hs TestFiles.hs gram
 
 gram: grammar.cf
 	bnfc grammar.cf >/dev/null
-	happy -ga$(HAPPY_DEBUG) ParGrammar.y >/dev/null
+	happy -ga$(HAPPY_DEBUG) --info=GramDoc.txt ParGrammar.y >/dev/null
 	alex -g LexGrammar.x >/dev/null
 	ghc --make TestGrammar.hs -o TestGrammar
-
-
 
 
 clean:
@@ -20,4 +18,3 @@ clean:
 
 distclean: clean
 	-rm -f DocGrammar.* LexGrammar.* ParGrammar.* LayoutGrammar.* SkelGrammar.* PrintGrammar.* TestGrammar.* AbsGrammar.* TestGrammar ErrM.* SharedString.* ComposOp.* grammar.dtd XMLGrammar.*
-

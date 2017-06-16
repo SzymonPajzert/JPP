@@ -9,6 +9,7 @@ import Control.Monad.Writer
 import DynGrammar
 import Compile
 import Util
+import Exp (true)
 
 import Err
 
@@ -24,6 +25,7 @@ testFilesPairs = [
   "good/fast_fib.ad",
   "good/local_scope.ad",
   "good/nested_let.ad",
+  "good/nested_let2.ad",
   "good/basic_match.ad",
   "good/tuple.ad",
   "good/list_match.ad",
@@ -31,7 +33,8 @@ testFilesPairs = [
   "good/infinite_list.ad",
   "good/list_exists.ad",
   "good/list_sum.ad",
-  "good/higher_order_lists.ad"
+  "good/higher_order_lists.ad",
+  "good/tree_match.ad"
   -- , "good/match_gen.ad"
   -- "good/call_by_need.ad"
   ]
@@ -48,7 +51,7 @@ helpTestFile fileCont =
        return False
      Ok prog -> do
        case interpret prog of
-         Ok (EBool True) -> do
+         Ok value | value == true -> do
            log "Ok"
            return True
          Ok expr -> do
@@ -58,7 +61,7 @@ helpTestFile fileCont =
          Bad err -> do
            log "Runtime error: "
            log $ show err
-           log $ indent prog
+           log $ indent $ fst prog
            return False
 
 testFile :: String -> IO Bool

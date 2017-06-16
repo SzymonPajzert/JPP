@@ -7,10 +7,12 @@ module Main where
 
 import System.IO ( stderr, hPutStrLn )
 import System.Environment ( getArgs )
-import DynamicGrammar
 
-import ErrM
-
+import DynGrammar
+import Compile
+import Err
+import Exp
+import Util
 
 -- TODO maybe use verbosity of error messages
 type Verbosity = Int
@@ -20,22 +22,15 @@ main = do
   [fileName] <- getArgs
   file <- readFile fileName
 
-  case parse file >>= desugar_prog of
+  case parse file >>= desugarProg of
     Bad err -> do
       hPutStrLn stderr "Compilation error:"
-      hPutStrLn stderr err
+      hPutStrLn stderr $ show err
     Ok expr -> do
       case interpret expr of
-        Ok (EVal value) ->
-          putStrLn $ show value
-        Ok expr -> do
-          hPutStrLn stderr "Bad return value"
-          hPutStrLn stderr $ indent expr
+        Ok final -> do
+          putStrLn $ show final
         Bad err -> do
           hPutStrLn stderr "Runtime error: "
-          hPutStrLn stderr err
+          hPutStrLn stderr $ show err
           hPutStrLn stderr $ indent expr
-
-
-
-

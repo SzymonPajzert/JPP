@@ -4,30 +4,38 @@ import Prelude hiding (unlines, exp)
 import Control.Monad.Reader
 import Exp
 
+
+type IndentString = Reader Int String
+
+-- TODO probably remove
+-- | Return two lists only if they are matching length 
+safeZip :: [a] -> [b] -> Maybe [(a, b)]
+safeZip (a:as) (b:bs) = fmap ((:) (a, b)) $ safeZip as bs
+safeZip []     []     = Just []
+safeZip _      _      = Nothing
+
+-- | Print expression in indented way
 indent :: Exp -> String
 indent exp = runReader (print_indent exp) 0
 
-make_indent :: String -> Reader Int String
+-- | Create indented version of string
+make_indent :: String -> IndentString
 make_indent word = do
   n <- ask
   return $ (take n $ repeat ' ') ++ word 
 
+-- | Out version of unlines which doesn't append newline to last line
 unlines :: [String] -> String
 unlines [] = []
 unlines [line] = line
 unlines (l:ls) = l ++ ('\n' : (unlines ls))
 
-print_indent :: Exp -> Reader Int String
+-- | Create indented version of exp
+print_indent :: Exp -> IndentString
 print_indent (EApp fun arg) = do
   funS <- print_indent fun
   argS <- local (+2) (print_indent arg)
   return $ unlines [funS,argS]
-
-print_indent (EIf cond true false) = do
-  condS <- print_indent cond
-  trueS  <- local (+2) (print_indent true)
-  falseS <- local (+2) (print_indent false)
-  return $ unlines [condS, trueS, falseS]
 
 print_indent (ELet defs finalExp) = do
   letS <- make_indent "let"
@@ -60,9 +68,6 @@ print_indent (EOp op exp1 exp2) = do
 print_indent (EInt value) = do
   make_indent $ show value
 
-print_indent (EBool bool) = do
-  make_indent $ show bool
-
 print_indent (ETup tuple) = do
   make_indent (unwords (map show tuple)) 
 
@@ -72,15 +77,17 @@ print_indent (EMat exp binds) = do
   withS <-  make_indent "with"
   bindsS <- mapM (\bind -> local (+2) (print_indent_bind bind)) binds
 
-  return $ unlines $ [matchS, expS, withS] ++ bindsS 
-
+  return $ unlines $ [matchS, expS, withS] ++ bindsS
+  where
+    print_indent_bind (bind, expBind) = do
+      bindS <- make_indent $ (show bind) ++ " ->"
+      expS <- local (+2) (print_indent expBind)
+      return $ unlines [bindS, expS]
+  
 print_indent (ECon name params) = do
   nameS <- make_indent name
   paramsS <- sequence $ map print_indent params
 
   return $ unlines (nameS : paramsS)
 
-print_indent_bind (bind, exp) = do
-  bindS <- make_indent $ (show bind) ++ " ->"
-  expS <- local (+2) (print_indent exp)
-  return $ unlines [bindS, expS]
+

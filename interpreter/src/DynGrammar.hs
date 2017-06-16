@@ -3,29 +3,18 @@
 module DynGrammar (interpret, Exp(..)) where
 
 
-import Prelude hiding (exp, error, unlines)
+import Prelude hiding (exp, error, unlines, seq, pred)
 import qualified Data.Map.Strict as Map
 import Control.Monad.Reader
-import Debug.Trace
+import Debug.Trace (trace)
 
-import Exp 
-import Err 
-import Util (unlines, indent)
+import Exp
+import Err
+import Util (safeZip, indent)
 
-type ExpEnv = (Exp, Environment)
+type EvalResult = EnvErr ExpEnv
 
-newtype Bindings = Bindings { getMap :: (Map.Map Var ExpEnv) }
-
-type EvalResult = Reader Environment (RunErr ExpEnv)
-
-instance Show Bindings where
-  show (Bindings bindMap) = unlines $ map represent (Map.toList bindMap)
-    where represent (var, exp) = var ++ " -> " ++ (show exp)
-  
-data Environment = Environment
-  { bindings :: Bindings } deriving (Show)
-
-type RunErr = Err RuntimeError
+type RunErr = Err (RuntimeError, Environment)
 
 data RuntimeError
   = AppTypeMismatch FuncId [Exp]
@@ -39,53 +28,32 @@ data FuncId
   | FuncOp  Op
   deriving (Show)
 
-type MaybeBind =  RunErr (Maybe ([(Var, Exp)], Environment))
+type MaybeBind =  Maybe ([(Var, Exp)], Environment)
 
-emptyEnv :: Environment
-emptyEnv = Environment $ Bindings Map.empty
+type EnvErr a = Reader Environment (RunErr a)
 
-interpret :: Exp -> RunErr Exp
-interpret exp = runReader (evalExp exp) env >>= (return . fst)
-  where
-    baseMap = Map.fromList [("True", (EBool True, emptyEnv)),
-                            ("False", (EBool False, emptyEnv))
-                           ]
-    env = Environment (Bindings baseMap)
-                      
+returnError :: RuntimeError -> Reader Environment (RunErr a)
+returnError err = do
+  env <- ask
+  return $ Bad $ (err, env)
 
-addBinding :: Var -> ExpEnv -> Environment -> Environment
-addBinding var exp env = env {bindings = Bindings (Map.insert var exp (getMap $ bindings env)) }
-
-addBindings :: [(Var, Exp)] -> Environment -> Reader Environment Environment
-addBindings anyDefs env = do
-  boundAnyDefs <- mapM bindEnv anyDefs
-  return $ foldl (flip (uncurry addBinding)) env boundAnyDefs
-  where
-    bindEnv (var, exp) = return $ (var, (exp, env))
+interpret :: CompiledProgram -> RunErr Exp
+interpret (exp, env) = runReader (evalExp exp) env >>= (return . fst)
 
 getBinding :: Var -> Reader Environment (Maybe ExpEnv)
 getBinding ident = do
   bindMap <- asks (getMap . bindings)
   return $ Map.lookup ident bindMap
 
--- | Merge two environments, first one has precedence in case of conflicts
-mergeEnv :: Environment -> Environment -> Environment
-mergeEnv env1 env2 = Environment $ Bindings ((getMap $ bindings env1) `Map.union` (getMap $ bindings env2))
-
-safeZip :: [a] -> [b] -> Maybe [(a, b)]
-safeZip (a:as) (b:bs) = fmap ((:) (a, b)) $ safeZip as bs
-safeZip []     []     = Just []
-safeZip _      _      = Nothing
-
-bindValues :: Bind -> Exp -> Reader Environment MaybeBind
-bindValues BIgnore      _   = return $ Ok $ Just ([], emptyEnv)
-bindValues (BVar var)   exp = return $ Ok $ Just ([(var, exp)], emptyEnv)
+bindValues :: Bind -> Exp -> EnvErr MaybeBind
 bindValues bind lazyExp = do
   expError <- evalExp lazyExp
   case expError of
     Bad error -> return $ Bad error
     -- possibly have to save the environment
     Ok (exp, env) -> case (bind, exp) of
+      (BIgnore     , _ )          -> return $ Ok $ Just ([], emptyEnv)
+      ((BVar var)  , valueExp)    -> return $ Ok $ Just ([(var, valueExp)], emptyEnv)
       ((BTup binds), (ETup exps)) -> bindLists binds exps env
       ((BTup _)    , _          ) -> return $ Ok $ Nothing
       ((BInt int)  ,(EInt value)) -> return $ Ok $
@@ -97,7 +65,7 @@ bindValues bind lazyExp = do
         else return $ Ok $ Nothing
       ((BPol _ _) , _          ) -> return $ Ok $ Nothing
 
-bindLists :: [Bind] -> [Exp] -> Environment -> Reader Environment MaybeBind
+bindLists :: [Bind] -> [Exp] -> Environment -> EnvErr MaybeBind
 bindLists binds exps env =
   case safeZip binds exps of
     Nothing -> return $ Ok $ Nothing
@@ -110,10 +78,10 @@ bindLists binds exps env =
           Just result -> do
             let (values, envs) = unzip result
             let finalEnv = foldl mergeEnv env envs
-            return $ Ok $ Just (concat values, finalEnv) 
-          
-                     
-tryBinds :: [(Bind, Exp)] -> Exp -> Reader Environment (RunErr (Maybe (([(Var, Exp)], Environment), Exp)))
+            return $ Ok $ Just (concat values, finalEnv)
+
+
+tryBinds :: [(Bind, Exp)] -> Exp -> EnvErr (Maybe (([(Var, Exp)], Environment), Exp))
 tryBinds []     _   = return $ Ok $ Nothing
 tryBinds ((b,cont):bs) exp = do
   bound <- bindValues b exp
@@ -125,53 +93,44 @@ tryBinds ((b,cont):bs) exp = do
 unpack :: (RunErr (Maybe (a, b))) -> (RunErr (Maybe a), RunErr (Maybe b))
 unpack (Bad error) = (Bad error, Bad error)
 unpack (Ok Nothing) = (Ok Nothing, Ok Nothing)
-unpack (Ok (Just (a, b))) = (Ok $ Just a, Ok $ Just b) 
+unpack (Ok (Just (a, b))) = (Ok $ Just a, Ok $ Just b)
 
 substitute :: Var -> Exp -> Exp -> Exp
 substitute varS valS exp = case exp of
   (ELet defs mainExp) -> ELet defs (sub mainExp)
   (EApp exp1 exp2) -> EApp (sub exp1) (sub exp2)
-  (EIf cond true false) -> EIf (sub cond) (sub true) (sub false)
   (ELam lamExp var) -> ELam (sub lamExp) var
   (EOp op exp1 exp2) -> EOp op (sub exp1) (sub exp2)
   (EVar var) | var == varS -> valS
   (ETup tuple) -> ETup (map sub tuple)
-  (EMat expr binds) -> EMat (sub expr) (map (\(bind, exp) -> (bind, sub exp)) binds)
+  (EMat expr binds) -> EMat (sub expr) (map (\(bind, expBind) -> (bind, sub expBind)) binds)
   (ECon name elems) -> ECon name (map sub elems)
   var @ (EVar _) -> var
   val @ (EInt _) -> val
-  val @ (EBool _) -> val
   where sub = substitute varS valS
 
 substituteMany :: [(Var, Exp)] -> Exp -> Exp
 substituteMany binds expr = foldl (flip (uncurry substitute)) expr binds
 
-substituteBind :: Environment -> Exp -> MaybeBind -> RuntimeError -> EvalResult
+substituteBind :: Environment -> Exp -> (RunErr MaybeBind) -> RuntimeError -> EvalResult
 substituteBind env expr bound matchError =
   case bound of
     Bad error      -> return $ Bad error
-    Ok Nothing     -> return $ Bad $ matchError
+    Ok Nothing     -> returnError $ matchError
     Ok (Just (valPairs, environment))  -> do
       let subExp = substituteMany valPairs expr
       local (mergeEnv environment . mergeEnv env) (evalExp subExp)
 
 evalExp :: Exp -> EvalResult
--- evalExp value | trace ((indent value) ++ "----------------\n\n\n") False = undefined
-evalExp (EIf condExp trueExp falseExp) = do
-  cond <- evalExp condExp
-  case cond of
-    Bad err -> return $ Bad err
-    Ok ((EBool bool), _) -> evalExp $ if bool then trueExp else falseExp
-    Ok (value, _) -> return $ Bad $ AppTypeMismatch (FuncVar "if") ([value])
+-- evalExp value | trace ((indent value) ++ "\n----------------\n\n") False = undefined
 
 evalExp (ELet defs exp) = do
   env <- ask
-  
   newEnv <- addBindings defs env
 
   evalPair <- local (mergeEnv newEnv) (evalExp exp)
   case evalPair of
-    Ok (evalExp, _) -> return $ Ok (evalExp, newEnv)
+    Ok (evalExpValue, _) -> return $ Ok (evalExpValue, newEnv)
     err @ (Bad _)  -> return err
 
 evalExp lambda @ (ELam _ _) = do
@@ -183,9 +142,10 @@ evalExp (EVar ident) = do
   case bindMaybe of
     Nothing -> do
       env <- ask
-      return $ Bad $ UnboundVar ident env
+      returnError $ UnboundVar ident env
     Just (value, env) -> local (mergeEnv env) (evalExp value)
-  
+
+-- TODO make nicer
 evalExp (EOp op left right) = do
   leftEval <- evalExp left
   rightEval <- evalExp right
@@ -195,7 +155,7 @@ evalExp (EOp op left right) = do
   case evalValue of
     Ok value      -> return $ Ok (value, env)
     Bad err       -> return $ Bad err
-  
+
 evalExp (EApp funcExp valueExp) = do
   funcErr <- evalExp funcExp
   case funcErr of
@@ -203,7 +163,7 @@ evalExp (EApp funcExp valueExp) = do
     Ok ((ELam fun bind), env) -> do
       bound <- bindValues bind valueExp
       substituteBind env fun bound (MatchError valueExp [bind])
-    Ok (value, _)             -> return $ Bad $ WrongType value valueExp
+    Ok (value, _)             -> returnError $ WrongType value valueExp
 
 evalExp (EMat mExp binds) = do
   mExpMaybe <- evalExp mExp
@@ -216,15 +176,14 @@ evalExp (EMat mExp binds) = do
 
       case contMaybe of
         Bad error -> return $ Bad error
-        Ok Nothing -> return $ Bad matchError
+        Ok Nothing -> returnError matchError
         Ok (Just cont) -> substituteBind expEnv cont bound matchError
-        
+
 evalExp (ETup tuple) = helpEvalList tuple ETup
 evalExp (ECon name params) = helpEvalList params (ECon name)
 evalExp value @ (EInt  _) = return $ Ok (value, emptyEnv)
-evalExp value @ (EBool _) = return $ Ok (value, emptyEnv)
 
-helpEvalList :: [Exp] -> ([Exp] -> Exp) -> EvalResult 
+helpEvalList :: [Exp] -> ([Exp] -> Exp) -> EvalResult
 helpEvalList list packing = do
   env <- ask
   return $ Ok $ (packing list, env)
@@ -238,8 +197,10 @@ evalOp :: Op -> (Exp -> Exp -> RunErr Exp)
 evalOp OpAdd (EInt a) (EInt b) = Ok $ EInt (a + b)
 evalOp OpMul (EInt a) (EInt b) = Ok $ EInt (a * b)
 evalOp OpSub (EInt a) (EInt b) = Ok $ EInt (a - b)
-evalOp OpAnd (EBool a) (EBool b) = Ok $ EBool (a && b) 
-evalOp OpOr  (EBool a) (EBool b) = Ok $ EBool (a || b)
-evalOp OpLes (EInt a) (EInt b) = Ok $ EBool (a < b)
-evalOp OpEqu (EInt a) (EInt b) = Ok $ EBool (a == b)
-evalOp op arg1 arg2 = Bad $ AppTypeMismatch (FuncOp op) [arg1, arg2]
+evalOp OpLes (EInt a) (EInt b) = Ok $ encode (a < b)
+evalOp OpEqu exp1 exp2 = Ok $ encode (exp1 == exp2)
+evalOp op arg1 arg2 = Bad $ (AppTypeMismatch (FuncOp op) [arg1, arg2], emptyEnv)
+
+
+encode :: Bool -> Exp
+encode pred = if pred then true else false

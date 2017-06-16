@@ -1,0 +1,7 @@
+x = Node 5 (Empty) (Node 3 Empty Empty);
+
+test = match x with {
+	 | Node y _ _ -> y
+	 };
+
+main = test = 5;
